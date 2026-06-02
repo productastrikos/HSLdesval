@@ -9,6 +9,7 @@ import Validator from './pages/Validator';
 import Specifications from './pages/Specifications';
 import Visualizer3D from './pages/Visualizer3D';
 import Compliance from './pages/Compliance';
+import Settings from './pages/Settings';
 import Layout from './components/Layout';
 
 ChartJS.defaults.interaction.mode = 'index';
@@ -43,6 +44,7 @@ function App() {
             <Route path="/specifications"  element={<Specifications />} />
             <Route path="/visualizer"      element={<Visualizer3D />} />
             <Route path="/compliance"      element={<Compliance />} />
+            <Route path="/settings"        element={<Settings />} />
             <Route path="*"                element={<Navigate to="/" />} />
           </Routes>
         </Layout>

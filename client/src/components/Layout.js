@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../services/socket';
+import { isConfigured } from '../services/aiService';
 import AlertPanel from './AlertPanel';
 import AdvisoryPanel from './AdvisoryPanel';
 
@@ -38,6 +39,12 @@ const NAV_SECTIONS = [
       { path: '/compliance',     icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', label: 'Compliance & Audit' },
     ],
   },
+  {
+    label: 'System',
+    items: [
+      { path: '/settings',       icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z', label: 'Settings & AI Config' },
+    ],
+  },
 ];
 
 /* ─── Deep search index  ──────────────────────────────────
@@ -53,6 +60,7 @@ const SEARCH_INDEX = [
   { label:'Specification Generator',path:'/specifications', breadcrumb:['Validation','Spec Generator'],          icon:'📋', keywords:'specification generator equipment system technical spec build hvac electrical mechanical piping hull outfit' },
   { label:'3D Design Viewer',      path:'/visualizer',      breadcrumb:['Visualization','3D Viewer'],            icon:'🗺', keywords:'3d visualizer design viewer ship hull frames bulkhead compartment three dimensional model' },
   { label:'Compliance & Audit',    path:'/compliance',      breadcrumb:['Governance','Compliance'],              icon:'👥', keywords:'compliance audit trail traceability usage analytics access security defence cyber' },
+  { label:'Settings & AI Config',  path:'/settings',        breadcrumb:['System','Settings'],                    icon:'⚙', keywords:'settings api key anthropic claude ai configuration knowledge base kb rag backend server' },
 ];
 
 /* ─── Icon helper ──────────────────────────────────────── */
@@ -69,6 +77,7 @@ const SEARCH_ICON_PATHS = {
   '📊': 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
   '🗑': 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16',
   '🚛': 'M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0zM3 17h2M17 17h2M1 9h18M13 3H1v14h12V3zM13 5h4l3 6H13V5z',
+  '⚙': 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z',
   '⚡':  'M13 10V3L4 14h7v7l9-11h-7z',
   '♻':  'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
   '📦': 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
@@ -87,6 +96,7 @@ const PAGE_TITLES = {
   '/specifications':  'Specification Generator',
   '/visualizer':      '3D Design Viewer',
   '/compliance':      'Compliance & Audit',
+  '/settings':        'Settings & AI Config',
 };
 
 export default function Layout({ children, user, onLogout, theme = 'dark', onThemeToggle }) {
@@ -331,6 +341,20 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
           </div>
 
           <div className="flex-1" />
+
+          {/* AI status chip */}
+          <button
+            onClick={() => navigate('/settings')}
+            title="AI Settings"
+            className={`hidden sm:flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-md border transition-colors ${
+              isConfigured()
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
+                : 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${isConfigured() ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+            {isConfigured() ? 'AI Ready' : 'AI: Setup'}
+          </button>
 
           {/* Live time */}
           <div className="hidden md:block font-mono text-xs px-2 py-1 rounded-md"

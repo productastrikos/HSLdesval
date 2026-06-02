@@ -1,0 +1,163 @@
+DNV RULES FOR CLASSIFICATION — SHIPS
+PART 4 — SYSTEMS AND COMPONENTS
+DNV-RU-SHIP — Edition July 2024
+Det Norske Veritas AS
+
+=============================================================================
+CHAPTER 1 — GENERAL
+=============================================================================
+
+Section 1 — Introduction
+1.1.1 Part 4 of the DNV Ship Rules covers the requirements for systems and components installed on ships. The rules are divided into chapters covering main machinery, rotating machinery, piping, electrical, HVAC, and control systems.
+1.1.2 Classification notations granted under Part 4 include: E0 (periodically unattended machinery space), ECO (enhanced control), F-AMC (advanced monitoring and control), and specific machinery/system notations.
+1.1.3 DNV verifies compliance by: plan approval; survey during manufacture and installation; function testing and sea trials.
+
+=============================================================================
+CHAPTER 2 — MAIN PROPULSION AND AUXILIARY MACHINERY
+=============================================================================
+
+Section 2 — Diesel Engines
+2.2.1 Main propulsion diesel engines shall comply with DNV rules for machinery, and engine manufacturer's approved drawings.
+2.2.2 Power certification: maximum continuous rating (MCR) verified by shop test witnessed by DNV. Test run at 100%, 85%, and 75% MCR minimum.
+2.2.3 Crankshaft: design per IACS UR M56. Material forged steel min UTS 600 N/mm².
+2.2.4 Torsional vibration analysis required for all shafting systems. Resonance avoidance or approved detuner/damper.
+2.2.5 Fuel system: high-pressure fuel injection pipes above 1.8 MPa working pressure: double-walled with fuel leakage alarm. Outer casing metallic. Leakage detection by flow monitoring or visual indicator.
+2.2.6 Lubrication: dedicated lube oil service pump. Pre-lubrication before starting required for medium-speed engines (>1000 RPM). Lube oil purifier for main diesel engines.
+2.2.7 Cooling: two-circuit cooling (HT/LT) for main engines > 2 MW. Central freshwater cooling preferred. Seawater cooling pump: 2 pumps, n+1 redundancy for ships > 1000 GT.
+2.2.8 Starting system: compressed air starting or electric starting. Compressed air: minimum 2 air receivers, total capacity for 12 starts (6 ahead, 6 astern). Starting air pressure range: 25–30 bar. Safety valve and bursting disc on air receivers.
+
+Section 3 — Gearboxes
+2.3.1 Reduction gear selection: DNV type approval required for gearboxes on ships > 500 GT.
+2.3.2 Gear tooth design: per DNV rules or ISO 6336. Safety factor on bending ≥ 1.8; surface durability ≥ 1.2.
+2.3.3 Gear oil lubrication: forced lubrication with dedicated pump. Gear oil temperature: ≤ 80°C in sump. High temperature alarm, very high temperature automatic shutdown.
+2.3.4 Clutch or coupling: between engine and gearbox for speed variation. Approved friction or fluid coupling with torque limiter.
+
+=============================================================================
+CHAPTER 3 — ROTATING MACHINERY
+=============================================================================
+
+Section 2 — Propulsion Shafts
+3.2.1 Main propulsion shaft material: carbon steel forgings, yield ≥ 225 N/mm², UTS ≥ 400 N/mm². Class II notch toughness required for shafts in cold service areas (< -10°C ambient).
+3.2.2 Shaft diameter formula (DNV, intermediate shaft):
+  d_s = 100 × ((k_1 × P) / (σ_a × n × (1-Q^4)))^(1/3) mm
+  k_1 = shaft material factor (100 for carbon steel, lower for alloy steel as per DNV table).
+  P = MCR in kW; n = shaft RPM; Q = bore-to-diameter ratio (0 for solid shaft).
+  σ_a = allowable torsional stress = min(15, ReH/6) N/mm² for continuous service.
+3.2.3 Shaft alignment: see IACS UR M57. Additional DNV requirement: shaft alignment verification in all ship loading conditions (light ship, full load ballast, full load departure and arrival).
+3.2.4 Shaft coupling: flanged rigid coupling bolts, size per DNV formula. Reamed bolts with transition fit. Torque plus bending moment load case.
+3.2.5 Intermediate bearing: white metal or polymer-lined. Maximum surface pressure per DNV table. Forced lubrication required if bearing length/diameter > 1.5.
+3.2.6 Shaft inspection at intermediate survey: remove all shaft-end sealing, inspect shaft for corrosion, cracks, and wear. UT of shaft surface in way of keyway and coupling bore.
+
+Section 3 — Propellers
+3.3.1 Propeller material: cast nickel-aluminium bronze (Cu3 grade per DNV NV Cu3 specification) or equivalent approved material.
+3.3.2 Propeller blade strength: design torque × 1.15 applied as static bending. Blade section modulus at 0.35R to be verified by calculation.
+3.3.3 Propeller cavitation: blade tip loading per lifting-line theory or CFD. Minimum pressure coefficient above vapour pressure with 10% margin.
+3.3.4 FPP (fixed pitch propeller): weight and CG determination by weighing. Blade pitch measurement at 0.25R, 0.50R, 0.70R, 0.85R before and after fitting.
+3.3.5 CPP (controllable pitch propeller): hub design for DNV approval. Hydraulic pressure system at ≥ 160 bar. Pitch control from bridge. Fail-safe: propeller moves to full astern pitch or stops on hydraulic failure (not feathering unless ship design allows).
+3.3.6 Shaft seal: oil-lubricated aft seal with lip seal technology or water-lubricated cutlass bearing. Oil seal leakage measurement at each annual survey. Seal replacement: type-approved replacement kits per manufacturer.
+
+=============================================================================
+CHAPTER 4 — PROPULSION AND MANOEUVRING SYSTEMS
+=============================================================================
+
+Section 2 — Azimuth Thrusters and Podded Propulsors
+4.2.1 Pod units (azimuth thrusters): pod shaft seal to be accessible for inspection without drydocking (ROV inspection or equivalent). Pod unit designed for full thrust at any 360° azimuth angle.
+4.2.2 Load capacity: DNV load cases for pod: full ahead at full power, turning at full power, emergency stop, ice impact load (for ice class).
+4.2.3 Electrical pod drives: power cable from hull to pod through slipring or flexible cable loop. Cable current-carrying capacity rated for full motor current × 1.25.
+4.2.4 Dynamic Positioning (DP) systems: DP1 (1 generator, 1 thruster set), DP2 (segregated redundant), DP3 (separated by fire and flood subdivision). DNV DYNPOS-AUTR notation for DP2; DYNPOS-AUTRO for DP3.
+
+Section 3 — Bow Thrusters
+4.3.1 Bow thruster power: determined from manoeuvrability calculation. Tunnel diameter ≥ 0.15 × ship breadth for effective thrust.
+4.3.2 Tunnel bell-mouth: minimum 3% of tunnel area flare at inlet. Tunnel internally coated to reduce friction.
+4.3.3 Reversing gear or CPP for directional thrust reversal. Electric motors reversible without mechanical reversing gear.
+4.3.4 Isolation valve (tunnel closure flap): required for bow thrusters fitted below ballast waterline. Valve operable from above freeboard deck.
+
+=============================================================================
+CHAPTER 5 — ELECTRICAL INSTALLATIONS
+=============================================================================
+
+Section 2 — Power Generation
+5.2.1 DNV requirements for generators: per IEC 60092-301. Additional DNV requirements:
+  - Cooling for tropical operations: generators to be rated for 50°C ambient (total temperature class) when operating in Indian Ocean and Red Sea service.
+  - Load shedding: non-essential consumers to be automatically shed on generator overload ≥ 100% rated load to prevent blackout.
+  - Preferential trip sequence: sequence of shedding defined: (1) hotel loads; (2) cargo handling; (3) HVAC non-essential; leaving: propulsion, navigation, safety, habitability minimum.
+  - Shore power connection: with phase sequence checking relay preventing connection with incorrect rotation. Shore voltage 440 V ± 10%.
+5.2.2 Shaft generator: for ships with shaft generator (PTI/PTO): control system with automatic changeover to diesel generator on shaft generator failure. Load ramp for smooth changeover.
+
+Section 3 — Distribution System
+5.3.1 Circuit breaker selectivity: all MCBs at final circuit level to coordinate with upstream MCCB so downstream fault does not trip upstream breaker.
+5.3.2 Short circuit calculation: available fault current at each distribution point per IEC 60909. All equipment (switchgear, busbars, cables, MCBs) rated ≥ available fault current.
+5.3.3 Harmonic mitigation: where THDv at MSB > 8%, harmonic filter or active front-end VSD to be provided. Harmonic analysis per IEC 61000-3-12 for high-power non-linear loads.
+
+=============================================================================
+CHAPTER 6 — PIPING SYSTEMS
+=============================================================================
+
+Section 1 — General
+6.1.1 Piping systems shall be designed, fabricated, and tested per DNV rules for piping. System pressure class determines pipe wall thickness, material, joint type, and test pressure.
+6.1.2 Piping classes (DNV):
+  Class I: fluid hazardous (flammable, toxic, cargo); high pressure (p ≥ 64 bar or t ≥ 400°C); large bore (> DN 400). Full NDT on welds. Survey all joints.
+  Class II: intermediate hazard; medium pressure (< 64 bar, < 400°C). Random NDT.
+  Class III: seawater, freshwater, compressed air at < 16 bar; sanitary water. Hydrostatic test only.
+6.1.3 Pipe materials:
+  Seawater: cupro-nickel (90/10 or 70/30 CuNi), duplex stainless, GRP (in non-safety-critical service), galvanised mild steel (limited).
+  Fuel oil: seamless carbon steel ASTM A106 or equivalent; corrosion-resistant lining or painting inside.
+  Steam (HT): alloy steel with chromium content > 1% for T > 350°C.
+  Cargo: specified by the cargo carried; tanker regulations.
+6.1.4 Flexible connections: rubber or metal bellow flexible couplings at machinery connections to absorb vibration. Bellow material resistant to fluid carried. Length per manufacturer for angular and offset deflection.
+6.1.5 Pipe supports: spacing per DNV table for pipe diameter and material. Pipe hangers: not less than one at each deck penetration. Anti-vibration clamps at 1 m each side of flexible coupling.
+6.1.6 Hydrostatic test: all Class I piping tested to 1.5 × design pressure. Class II: 1.5 × DP or 4 bar (whichever greater). Class III: 1.0 × DP or 4 bar. Test witnessed by DNV surveyor.
+
+Section 2 — Fuel Oil Systems
+6.2.1 High-pressure fuel lines (injection system, > 1.8 MPa): double-walled piping with outer casing directed to leak collection. Leak alarm.
+6.2.2 Fuel oil service tank: separate service tanks for HFO and MDO. Daily service tank: minimum capacity for 8 hours of operation at MCR.
+6.2.3 Settling tank: HFO settling tank minimum 24-hour capacity at normal consumption. Heated to maintain HFO viscosity for purification.
+6.2.4 Quick-closing valves: on all fuel oil tanks (service, settling, storage) and lube oil storage tanks. Remote operation from outside machinery space. DNV type-approved.
+6.2.5 Overflow prevention: high-level alarm on all fuel oil daily service and settling tanks. Overflow pipe directed back to storage tank.
+
+Section 3 — Bilge Systems
+6.3.1 Bilge pumping system shall cover all watertight compartments including: holds, cargo tanks (empty), machinery spaces, tunnels, voids, fore peak, after peak.
+6.3.2 Bilge pump capacity: minimum per IACS UR P1 formula. All bilge pumps self-priming.
+6.3.3 Bilge main: diameter d_main = 25 + 1.68 × √L (mm), minimum 50 mm.
+6.3.4 Bilge suction branches: diameter d_branch = 25 + 2.16 × √(B × D) (mm), minimum 50 mm. Branch connected to bilge main via non-return valve.
+6.3.5 Emergency bilge suction: direct suction connection from engine room bilge on main cooling sea water pump or ballast pump. Emergency suction: minimum d = 50 mm.
+6.3.6 Oil content meter and OWS: per MARPOL Annex I requirements (see IMO MARPOL document). All bilge overboard discharge through 15 ppm OWS.
+
+Section 4 — Ballast Systems
+6.4.1 Ballast pump capacity: fill or empty each ballast tank in maximum 4 hours.
+6.4.2 Ballast water treatment: BWM Convention (D-2 standard effective for new ships since 2017). Treatment system type approved per IMO resolution MEPC.174(58) or later. Log book for BWM operations.
+6.4.3 Sea chest: minimum 2 sea chests (high and low) for main sea water cooling. Each sea chest capacity ≥ 1.25 × maximum sea water flow rate.
+6.4.4 ICCP (impressed current cathodic protection): zinc or aluminium sacrificial anodes in all ballast tanks. Renewal at dry dock. ICCP for external hull surface optional but preferred for large ships.
+
+Section 5 — HVAC Systems (Ventilation and Air Conditioning)
+6.5.1 Machinery space ventilation: minimum capacity to remove excess heat and provide adequate combustion air for all installed engines at MCR.
+  Airflow Q_vent = (P_engine × η_loss × 3600) / (ρ_air × Cp_air × ΔT) m³/h
+  where ΔT = allowable temperature rise (typically 10°C above ambient), η_loss = fraction of input power dissipated as heat (typically 0.1 for diesel).
+6.5.2 Engine room temperature: maximum 50°C at floor level. Maximum 45°C at engine air intakes (includes consideration of radiative heat from hot surfaces).
+6.5.3 N+1 redundancy for machinery space supply fans: if any single supply fan fails, remaining fans to maintain ≥ 50% of required airflow.
+6.5.4 Fan types: centrifugal fans for supply (backward-curved impeller, low noise). Axial fans for exhaust where discharge can be directed away from supply air intakes.
+6.5.5 Exhaust fan for paint store: independent operation capability. Interlocked with paint store access hatch. ATEX-rated fan (for flammable vapor environment Zone 1).
+6.5.6 HVAC for accommodation: fan coil units or central air handling units. Fresh air per person: minimum 15 m³/h. Smoking rooms: higher fresh air rate per smoke exhaust calculation.
+6.5.7 Ventilation for battery rooms: forced ventilation based on maximum hydrogen generation rate (overcharge condition). Airflow to maintain H2 < 1% concentration. ATEX exhaust fan.
+6.5.8 CO2 flooding: machinery space ventilation shut-off dampers in supply and exhaust ducts, operable remotely before CO2 release.
+
+=============================================================================
+CHAPTER 7 — AUTOMATION AND CONTROL SYSTEMS
+=============================================================================
+
+Section 1 — Requirements for E0 Notation (Unattended Machinery Spaces)
+7.1.1 Ships with E0 notation: all normal operational functions of main propulsion and auxiliary machinery shall be controllable from the bridge without requirement for attendance in machinery spaces during normal operation.
+7.1.2 Alarms required for E0: high bilge water; main engine (lube oil pressure, cooling water temp, exhaust temp, rpm); shaft bearing high temp; generator (voltage, frequency, reverse power, overcurrent); fire detection; all high/low alarms on fuel, lube, and cooling systems.
+7.1.3 Alarm management system: priorities (class 1 = immediately life-threatening; class 2 = urgent; class 3 = attention required). Inhibit function: documented, time-limited inhibits only.
+7.1.4 Deadman alarm: engineer on-call alarm if no acknowledgement within 30 minutes.
+7.1.5 System failure: on critical system alarm, automatic switch to backup or safe state.
+
+Section 2 — PMAS (Propulsion Machinery Alarm System)
+7.2.1 Main engine monitoring points: lube oil pressure (main bearings, camshaft, turbocharger), lube oil temperature, jacket cooling water temperature (per cylinder and outlet), exhaust gas temperature (per cylinder, main collector, before/after turbocharger), air manifold pressure, fuel injection pressure, shaft power (torque × RPM).
+7.2.2 Trend monitoring: temperature and vibration trending for predictive maintenance. Data logged at minimum 1-minute intervals, retained 6 months.
+
+Section 3 — Cybersecurity
+7.3.1 DNV CP-0231 (Cybersecurity for ships): ship control and monitoring networks to comply with DNV cybersecurity rules.
+7.3.2 Network segmentation: OT (operational technology — propulsion and cargo control) networks physically or logically separated from IT (business) and internet-connected networks.
+7.3.3 Access control: role-based access. Remote access (satellite) requires VPN with multi-factor authentication.
+7.3.4 Vulnerability management: critical OT components (PLCs, HMIs, SCADA) to be assessed for known CVEs. Patching schedule maintained.

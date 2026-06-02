@@ -1,0 +1,198 @@
+INTERNATIONAL ELECTROTECHNICAL COMMISSION
+IEC 60092 SERIES — ELECTRICAL INSTALLATIONS IN SHIPS
+Edition 5.0 / 2024 (current consolidated)
+
+=============================================================================
+IEC 60092-101 — DEFINITIONS AND GENERAL REQUIREMENTS
+=============================================================================
+
+Scope: IEC 60092 series applies to electrical installations in sea-going ships. It specifies requirements for design, installation, testing, and maintenance of electrical systems.
+
+Key Definitions:
+  - Rated voltage: r.m.s. voltage at which the equipment is designed to operate.
+  - System voltage: phase-to-phase r.m.s. voltage in a 3-phase system; single-phase voltage in 1-phase system.
+  - LV (Low Voltage): ≤ 1000 V a.c. or ≤ 1500 V d.c.
+  - HV (High Voltage): > 1000 V a.c.
+  - Insulation class: A (105°C), B (130°C), F (155°C), H (180°C) per IEC 60085.
+  - IP designation: IP [first digit — solid protection] [second digit — liquid ingress protection] per IEC 60529.
+  - Ex rating: equipment for use in explosive atmospheres per IEC 60079 series.
+  - ICCP: impressed current cathodic protection system.
+
+Voltage Systems:
+  Preferred voltages for ship power systems:
+    LV distribution: 230/400 V (TN-S or IT), 440/760 V (IT preferred for ships), 600/1040 V (for large ships).
+    HV distribution: 3.3 kV, 6.6 kV, 11 kV for large ships with shaft generator or large motors.
+    Navigation and safety systems: 230 V AC single phase.
+    Control: 24 V DC (preferred for electronic systems), 110 V AC or DC acceptable.
+
+=============================================================================
+IEC 60092-201 — SYSTEM DESIGN — GENERAL
+=============================================================================
+
+Power System Configuration:
+  - All ships shall have two or more generators capable of supplying essential services with any one generator out of service.
+  - Generators shall be connected to common busbars via circuit breakers with overcurrent protection.
+  - Bus tie arrangement: for ships with 2+ main switchboards, bus tie (bus section) breaker shall allow operation split and parallel.
+  - Dead ship starting: from cold and dark condition, at least one generator shall be capable of self-starting. Compressed air or battery starter. Emergency generator start within 30 s.
+  - Earthed vs. unearthed systems: unearthed (IT) systems preferred for machinery space power distribution to allow first insulation fault to continue operation with alarm. TN-S earthed systems for accommodation 230 V circuits.
+  - Insulation monitoring: IT systems to be fitted with continuously operating insulation monitoring device (IMD) alarming on first fault. First fault ≤ 50 kΩ to trigger alarm.
+
+Load Calculation:
+  - Maximum demand: sum of connected loads × appropriate diversity/utilisation factors.
+  - Installed generating capacity: maximum demand × 1.1 (10% reserve minimum).
+  - Starting loads: motor starting kVA shall not cause bus voltage dip exceeding 15% at worst-case start.
+  - Engine room ventilation loads and cargo handling loads are intermittent — included with diversity factor.
+
+=============================================================================
+IEC 60092-202 — PROTECTIVE DEVICES
+=============================================================================
+
+Protection for LV Circuits:
+  - All circuits: overcurrent protection at origin (circuit breaker or fuse). Rating ≤ 125% of circuit current for resistive loads; motor circuits per IEC 60947 motor protective relay.
+  - Motor starters: overload relay with manual reset. Trip class per motor thermal rating.
+  - Short-circuit protection: instantaneous magnetic trip ≤ short-circuit current at point of installation.
+  - Generator protection: overcurrent, under/over-voltage, reverse power, differential (for generators > 50 kW on ships ≥ 1000 GT).
+  - Earth fault monitoring: IMD with alarm for IT systems; earth leakage circuit breaker (ELCB/RCD) for TN circuits in hazardous or damp areas.
+
+Selectivity (Discrimination):
+  - Time-current discrimination between main and sub-main breakers. Upstream breaker shall not trip on sub-circuit faults.
+  - Zone selective interlocking (ZSI) or time-grade coordination for main switchboard.
+
+=============================================================================
+IEC 60092-301 — GENERATORS AND MOTORS
+=============================================================================
+
+Generator Requirements:
+  - Voltage regulation: steady-state ± 2.5% from no-load to full-load for AVR (automatic voltage regulator).
+  - Voltage waveform THD: total harmonic voltage distortion ≤ 5% at no load, ≤ 8% at full load with non-linear loads.
+  - Frequency regulation: ± 5% in transient (load step); ± 2.5% steady-state.
+  - Parallel operation: generators shall be capable of load sharing within 15% of rated kW between units. Load-sharing device required for generators in parallel.
+  - Insulation: minimum Class F for winding insulation. Temperature rise Class B (≤ 80 K) for extended life.
+  - Cooling: TEWC (Totally enclosed water-cooled) or TEAAC (Totally enclosed air-to-air cooled) preferred. IP44 minimum in machinery spaces.
+  - Differential protection: required for generators > 50 kW on cargo ships ≥ 500 GT. 87G relay with 5-20% differential setting.
+  - Reverse power protection: required. For diesel generators: trip at 2–8% reverse power within 5–15 seconds.
+  - Protection relay testing: all generator protection relays to be tested with secondary injection annually.
+
+Motor Requirements:
+  - All motors rated for shipboard duty (marine designation). Insulation Class F minimum.
+  - IP55 for motors in machinery spaces. IP56 for motors on open decks or exposed areas.
+  - Motor efficiency: IE2 minimum for motors > 0.75 kW (per IEC 60034-30-1). IE3 preferred.
+  - VSD (Variable Speed Drive) motors: suitable for use with PWM converters. Inverter duty insulation or dV/dt filter at motor terminals.
+  - Emergency fire pump motor: LV, IP55, able to start and run with main supply on emergency generator.
+
+=============================================================================
+IEC 60092-302 — LOW-VOLTAGE SWITCHGEAR AND CONTROL GEAR ASSEMBLIES
+=============================================================================
+
+Main Switchboard (MSB) Requirements:
+  - Type-tested assembly (TTA) per IEC 61439-1/-2 for ratings > 800 A. Partial type-tested assembly (PTTA) with verification per IEC 61439 acceptable.
+  - Dead-front construction (all live parts behind panels). No live parts exposed when compartment doors are open.
+  - IP: IP42 minimum for MSBs in enclosed machinery spaces; IP44 for MSBs in open or damp areas; IP55 for switchboards on weather decks.
+  - Busbar: sized for continuous current + 20% spare. Braced for available short-circuit current (three-phase fault kA symmetrical).
+  - Busbar material: electrolytic copper, tin-plated or silver-plated at joints.
+  - Bus tie breaker: capable of closing on to fault (make-proof) for systems with multiple generators.
+  - Generator circuit breaker: current-limiting type for HV systems; MCCB or ACB for LV. Trip units: over-current (LT, ST, instant); under-voltage; reverse power.
+  - Metering: voltmeter, ammeter, frequency meter, power factor meter, energy meter, kWh meter for each generator and main feeder.
+  - Space heaters: thermostat-controlled in all switchboards to prevent condensation.
+  - Bus section: physical segregation of sections for passenger ships.
+
+Emergency Switchboard (ESB):
+  - Separate from MSB, located above uppermost continuous deck.
+  - Supplied from emergency generator and main bus via automatic changeover.
+  - ATSE (automatic transfer switch equipment): transfer within 30 s of main bus voltage failure.
+  - Battery charger: float charger for emergency battery bank. Battery to supply ESB lighting 3 hours on its own.
+
+=============================================================================
+IEC 60092-303 — TRANSFORMERS FOR POWER AND LIGHTING
+=============================================================================
+
+  - All transformers for ship service shall comply with IEC 60076 and additional marine service requirements.
+  - Enclosure: IP44 minimum for dry-type (cast-resin) transformers in machinery spaces. No oil-immersed transformers in accommodation areas.
+  - Temperature rise: Class F insulation. Winding temperature rise at rated load ≤ 100 K (class B limit for extended life).
+  - Impedance: ≤ 5% for transformers ≤ 2 MVA to limit voltage drop. For larger transformers, 6–8% acceptable.
+  - Cast-resin transformers: preferred in spaces where oil spillage is unacceptable (accommodation, galley, laundry).
+
+=============================================================================
+IEC 60092-304 — SEMI-CONDUCTOR CONVERTERS
+=============================================================================
+
+Variable Speed Drive (VSD) / Frequency Converter:
+  - All VSDs to comply with IEC 60146-1. Input power factor correction where total harmonic current distortion (THDi) at point of supply > 8%.
+  - Drive output: PWM carrier frequency ≥ 1.5 kHz. dV/dt filter if cable > 100 m between VSD and motor.
+  - Regenerative VSDs: active front end or regenerative braking resistor. Braking duty cycle to be specified.
+  - DC link UPS capability: VSDs may incorporate DC link UPS (ride-through) for momentary supply interruptions ≤ 100 ms.
+
+=============================================================================
+IEC 60092-305 — EMERGENCY AND TRANSITIONAL SOURCE OF POWER
+=============================================================================
+
+  - Emergency generator: capacity for all simultaneously connected emergency loads plus 10% spare.
+  - Emergency power: start within 30 s of failure of main supply (SOLAS III requirement embodied in IEC 60092-305).
+  - UPS: for systems requiring uninterrupted supply (navigation, GMDSS, automation, combat systems): online double-conversion UPS with battery autonomy per SOLAS/Class requirement.
+  - Emergency battery: minimum 30 Ah (12 V) for emergency starting circuit; dedicated battery for GMDSS.
+
+=============================================================================
+IEC 60092-350 — WIRING OF SHIPS — GENERAL CONSTRUCTION AND TEST REQUIREMENTS FOR CABLES
+=============================================================================
+
+  - All cables for marine use shall comply with IEC 60092-350 (general) and applicable part of series:
+    IEC 60092-353: single and multicore non-armoured, armoured, screened power cables 300/500V to 1.8/3kV.
+    IEC 60092-354: power cables 0.6/1kV to 1.8/3kV.
+    IEC 60092-355: shipboard control cables.
+    IEC 60092-356: data and signal cables.
+    IEC 60092-360: screened cables for high-frequency use (navigation, comms).
+  - Flame retardant: all cables in ships shall pass the single vertical flame test per IEC 60332-1 (minimum). Cables in high-density cable runs: pass IEC 60332-3 (bundle test). LSZH (low smoke zero halogen) required in accommodation spaces.
+  - Halogen-free: cables in accommodation, control stations, and escape routes: IEC 60754-2 (halogen acid gas content ≤ 0.5%). Smoke density IEC 61034.
+  - Minimum conductor size: 1.5 mm² for fixed wiring, 0.5 mm² for flexible cord.
+  - Cable identification: each cable shall be labelled at both ends and at intermediate intervals ≤ 15 m. Label to show cable number, from/to, and conductor identification.
+
+=============================================================================
+IEC 60092-352 — CHOICE AND INSTALLATION OF CABLES
+=============================================================================
+
+Cable Selection:
+  - Cable rated current (I_z) derated for: ambient temperature (deration factors per table); number of cables in group; thermal insulation enclosure.
+  - Voltage drop: maximum 3% from main switchboard to final socket outlet. Maximum 6% from generator terminals to any socket outlet.
+  - Mechanical protection: SWA (steel wire armoured) or STA (steel tape armoured) cables preferred in machinery spaces and cargo areas. Flexible cables in accommodation.
+  - Hydraulic fluid, oil, and fuel: cables in areas with potential fluid exposure to have PVC outer sheath compliant with oil resistance test.
+
+Cable Installation:
+  - Power cable segregation from instrumentation/control cables: minimum 50 mm air gap for cables < 3 m parallel run; minimum 100 mm for run > 3 m. Physical barrier (steel partition, trunking) acceptable in lieu of air gap.
+  - Cable tray support: horizontal runs ≤ 750 mm between supports; vertical runs ≤ 500 mm. Cable trays: perforated steel, minimum 1.5 mm thickness.
+  - Cable bending radius: power cables ≥ 8 × overall diameter; instrumentation/control ≥ 6 × overall diameter; data ≥ 4 × overall diameter at installed radius; ≥ 10 × during installation (for LV power cable).
+  - Watertight penetrations: through watertight bulkheads, transits approved per IEC 60092 and Class. Transit frame with sealing individual cables. Test to same pressure as surrounding structure.
+  - Fire stop (A-60 bulkhead): cables through Class A fire divisions in approved fire-stop transit. No combustible material within 100 mm of A division on either side.
+  - Drain holes in cable trays: at low points to prevent water pooling.
+
+=============================================================================
+IEC 60092-401 — INSTALLATION AND INITIAL TESTING OF ELECTRICAL INSTALLATIONS
+=============================================================================
+
+Testing Prior to Commissioning:
+  - Insulation resistance: all circuits to be tested with 500 V megger (for LV circuits). Minimum acceptable: 1 MΩ for circuits to 500 V; 2 MΩ for 500 V to 1000 V; 5 MΩ (preferred). Measured between each conductor and earth, and between conductors.
+  - HV circuits: 2500 V megger. Minimum 1 MΩ per kV rating.
+  - Earth continuity: all metallic cable trays, conduits, and equipment enclosures to be tested for earth continuity. Maximum resistance 0.1 Ω from equipment to nearest earth bar.
+  - Polarity: verify correct L1/L2/L3/N/PE connections at all distribution boards and sockets.
+  - Phase sequence: verify correct rotation for all 3-phase motor feeders.
+  - Generator paralleling: verify synchronising lamps or automatic synchroniser operation before first parallel operation.
+  - Protection relay settings: verify overcurrent, differential, and reverse power relay settings by primary or secondary injection test.
+  - Cable schedule: as-built cable schedule to be submitted to Class surveyor including: cable number, from/to, route, type, size, core count, insulation rating, length, installed date.
+
+Commissioning Tests:
+  - Generator load test: 25%, 50%, 75%, 100% rated load. Record voltage, frequency, kW, power factor at each load step.
+  - Emergency generator test: automatic start on supply failure simulation. Timer verified.
+  - Steering gear test: as per SOLAS Reg II-1/29.
+  - Fire alarm panel: all zones tested, alarm and fault indicators checked.
+  - GMDSS: communication system checks per Chapter IV.
+
+=============================================================================
+IEC 60092-502 — TANKERS — SPECIAL FEATURES
+=============================================================================
+
+Hazardous Areas in Tankers:
+  - Zone 0: inside cargo tanks, slop tanks, pipe tunnels — explosive atmosphere present continuously. Only intrinsically safe (Ex ia) equipment permitted.
+  - Zone 1: spaces enclosed within or adjacent to cargo tanks; cargo pump rooms; deck areas within 3 m of tank openings, gas outlets, cargo manifold, sample valves. Ex d, Ex e, Ex m, Ex p, or Ex ia equipment required.
+  - Zone 2: deck areas within 1.5 m of Zone 1 boundary. Ex e or Ex n (non-sparking) acceptable.
+  - Non-hazardous: accommodation, bridge, control rooms, engine room (separated by gas-tight bulkhead).
+  - Cable routing through hazardous areas: cables must be suitable for Zone 1 (SWA or equivalent mechanical protection; flame-retardant).
+  - Pump room: intrinsically safe (Ex ia) or flameproof (Ex d) equipment. No sockets or switches in pump room. All lighting flameproof. Ventilation: 20 air changes per hour minimum. Entry permit required.

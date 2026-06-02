@@ -1,0 +1,278 @@
+INTERNATIONAL MARITIME ORGANIZATION
+SOLAS — INTERNATIONAL CONVENTION FOR THE SAFETY OF LIFE AT SEA
+CONSOLIDATED EDITION 2020 (as amended to 2024)
+IMO Publication — SOLAS/CONF.5/34
+
+=============================================================================
+CHAPTER I — GENERAL PROVISIONS
+=============================================================================
+
+Regulation 2 — Definitions
+  - Passenger ship: ship carrying more than 12 passengers.
+  - Cargo ship: any ship that is not a passenger ship.
+  - Tanker: cargo ship constructed or adapted for carriage of liquid cargoes in bulk.
+  - Fishing vessel: ship used for catching fish, whales, seals, walruses, or other living resources.
+  - New ship: ship whose keel was laid on or after 25 May 1980.
+  - Administration: Government of the State whose flag the ship is entitled to fly.
+
+Regulation 14 — Surveys
+Ships shall be surveyed as follows:
+  (a) Initial survey before the ship is put into service;
+  (b) Renewal survey at intervals specified by the Administration not exceeding 5 years;
+  (c) Intermediate survey: within 3 months before or after the second anniversary date or within 3 months before or after the third anniversary date of the Safety Construction Certificate;
+  (d) Annual survey within 3 months before or after each anniversary date.
+
+=============================================================================
+CHAPTER II-1 — CONSTRUCTION — SUBDIVISION AND STABILITY, MACHINERY AND ELECTRICAL INSTALLATIONS
+=============================================================================
+
+Part B — Subdivision and Stability
+
+Regulation 1 — Application
+  B-1 applies to cargo ships ≥ 100 GT. Damage stability requirements per modified probabilistic method.
+
+Regulation 2 — Definitions for Subdivision
+  - Margin line: waterline 75 mm below the upper surface of the bulkhead deck.
+  - Floodable length: maximum length of compartment such that after flooding, the resulting waterline does not reach the margin line.
+  - Permissible length: floodable length × factor of subdivision.
+  - Factor of subdivision F: depends on criterion numeral C derived from ship length and character factor (number of passengers, service type).
+
+Regulation 5 — Collision Bulkhead
+SOLAS Ch.II-1 Reg 5: Collision bulkhead shall be fitted extending to the freeboard deck.
+  Position: between 0.05L and 0.08L from FP. For ships ≥ 200 m: minimum distance from FP shall be 10 m but not more than (0.08L + 1.0 m) from FP.
+  No doors, manholes, ventilation ducts, or other openings below the freeboard deck.
+  Anchor hawse pipes shall not pass through the collision bulkhead on ships > 100 m.
+  One valve on the pipe passing through — remotely operable from above freeboard deck.
+
+Regulation 9 — Double Bottoms
+SOLAS Ch.II-1 Reg 9 — Cargo ships:
+  An efficient double bottom shall be fitted for the midship 3/5 of the ship's length. Where practicable, double bottom shall extend from collision bulkhead to after peak bulkhead.
+  Height h_DB: to be sufficient to give access for inspection. Absolute minimum in any case: h_DB ≥ B/20 where B = ship breadth. For B > 20 m: h_DB = 1.0 m minimum.
+
+Regulation 11 — Peak and Machinery Space Bulkheads, Shaft Tunnels, etc.
+  After peak bulkhead and thrust block bulkhead (if fitted aft of engine room) shall be watertight to the freeboard deck.
+
+Regulation 13 — Openings in Watertight Bulkheads in Cargo Ships
+  Doors in watertight bulkheads: number to be minimum. Doors below freeboard deck shall be: (a) hinged quick-acting, (b) sliding with direct operation from both sides and remote from above freeboard deck, or (c) equivalent.
+  Watertight doors indicators: open/closed at door and remote at bridge.
+  Inspection and testing: watertight doors tested by flooding one side. Record in maintenance log.
+
+Regulation 22 — Stability Information for Passenger and Cargo Ships
+  Master to be supplied with approved stability information including loading conditions (full, ballast, departure, arrival), limiting GM or KG curves, and damage stability information as applicable.
+
+Part B-1 — Subdivision and Damage Stability of Cargo Ships
+
+Regulation 25 — Damage Stability for Cargo Ships
+SOLAS Ch.II-1 Reg 25:
+  Probabilistic damage stability assessment required for cargo ships ≥ 80 m L. The attained subdivision index A shall not be less than the required subdivision index R.
+  R = 1 − (1/(1 + 0.4 × L_s/100))
+  (L_s = subdivision length of the ship in metres)
+  A = Σ p_i × s_i over all damage cases.
+  p_i = probability that only the i-th compartment or group of compartments is flooded.
+  s_i = probability of survival after flooding the i-th compartment.
+
+Part C — Machinery Installations
+
+Regulation 26 — General (Machinery)
+SOLAS Ch.II-1 Reg 26: Ships shall be fitted with main propulsion machinery, steering gear, and related auxiliaries for safe navigation. Arrangements for safe and reliable manoeuvring in all expected conditions including failure of any single component.
+
+Regulation 29 — Steering Gear (General Requirements)
+SOLAS Ch.II-1 Reg 29:
+  - Ships ≥ 500 GT: hydraulic steering gear with at least 2 identical power units. Main steering gear capable of steering ship at maximum ahead service speed.
+  - Performance: main steering gear shall be capable of putting rudder from 35° on one side to 30° on the other side in not more than 28 seconds at the ship's deepest seagoing draught and at maximum ahead service speed (not less than 7 knots).
+  - Emergency steering gear: capable of carrying 15° on each side in not more than 60 seconds. Operable within 2 minutes of main steering gear failure.
+  - Steering gear control: from bridge (primary); from steering gear compartment (local secondary).
+  - Rudder angle indicator: at both steering positions.
+
+Regulation 30 — Steering Gear (Additional Requirements for Ships ≥ 10,000 GT)
+SOLAS Ch.II-1 Reg 30:
+  Main steering gear shall put rudder 35° each side to 35° other side in 28 seconds. Two power units — with either unit in operation the steering performance requirement shall be met.
+  If rudder stock torque > 294 kN·m: automatic isolation of each power unit and manual starting from bridge. Hydraulic pressure alarm and level alarm in header tank.
+  An alternative power supply from emergency source capable of operating main steering gear.
+
+Regulation 31 — Means of Going Astern
+SOLAS Ch.II-1 Reg 31: Propulsion machinery shall be capable of reversing the direction of thrust to arrest the ship within a reasonable distance from maximum ahead speed. Stopping distance, time, and energy recorded in sea trial results.
+  For all ships: astern power shall not be less than 70% of ahead design power for diesel-mechanical systems.
+
+Regulation 32 — Steam Boilers and Feed Systems
+  Main steam boilers with combined steam space > 0.14 m³: automatic shutdown for low water level, high steam pressure. Safety valve capacity: minimum 1.1 × maximum continuous evaporation rate.
+  Feed water pumps: minimum 2 feed pumps, each capable of maintaining boiler level at maximum evaporation rate. One to be independently driven.
+
+Regulation 35 — Electrical Power Supply
+SOLAS Ch.II-1 Reg 35: Ships shall be provided with electrical installations sufficient to serve all essential services. Generating sets capable of supplying all essential services.
+  Two or more generators for cargo ships. Power supply shall not be interrupted when any single generator is out of service.
+  Total installed power: must cover essential services with largest single generator out of service.
+  Load transfer: automatic when running generator fails.
+
+Regulation 38 — Emergency Source of Electrical Power in Cargo Ships
+SOLAS Ch.II-1 Reg 38: Emergency source of power (generator or battery) independent of main electrical installation.
+  Location: above the uppermost continuous deck and clear of machinery space.
+  Automatic start: within 30 seconds of main power failure (45 seconds for ships < 500 GT).
+  Autonomy: 18 hours minimum for all emergency services.
+  Services supplied by emergency generator:
+    (a) Emergency lighting: navigation light positions, emergency alarms, lifeboat and rescue boat stations, every alleyway and stairway for personnel escape;
+    (b) VHF, MF/HF, GMDSS;
+    (c) Navigation lights;
+    (d) Fire detection and alarm system;
+    (e) Fire fighting equipment (pumps);
+    (f) Emergency bilge pump;
+    (g) Watertight doors (closing);
+    (h) Daylight signalling lamp.
+
+=============================================================================
+CHAPTER II-2 — CONSTRUCTION — FIRE PROTECTION, FIRE DETECTION AND FIRE EXTINCTION
+=============================================================================
+
+Regulation 1 — Application
+  All ships on international voyages.
+
+Regulation 3 — Definitions (Fire Protection)
+  - Class A division: bulkhead, deck, formed of steel or equivalent. Insulated to resist passage of smoke and flame for 60 minutes (A-60), 30 minutes (A-30), 15 minutes (A-15), or 0 minutes (A-0).
+  - Class B division: bulkhead, deck, ceiling, linings. Resists flame passage for 30 minutes (B-15) or 0 minutes (B-0). Not necessarily steel.
+  - Class C division: incombustible materials, no requirement for resistance to flame or smoke.
+  - Fire point: temperature at which a substance sustains combustion after ignition.
+  - Low flame spread: surfaces that inhibit flame spreading per test in Appendix 1.
+  - Fire zone: zone bounded by A class divisions containing spaces in a fire group.
+
+Regulation 9 — Containment of Fire
+SOLAS Ch.II-2 Reg 9: Structure and materials:
+  - The hull, superstructure, structural bulkheads, decks, and deckhouses shall be constructed of steel or equivalent material.
+  - Structural fire protection provided by classification of spaces into main vertical zones by A class bulkheads.
+  - Cargo ship accommodation areas: accommodations spaces, control stations, and main vertical zones divided by A-60 bulkheads.
+  - Machinery space boundaries: A-60 (adjacent to accommodation and control stations), A-0 (other boundaries).
+
+Regulation 10 — Fire Fighting
+SOLAS Ch.II-2 Reg 10: Fire pumps:
+  - Cargo ships ≥ 500 GT: at least 2 motor-driven fire pumps. For ships ≥ 1000 GT: fire pumps total capacity ≥ 180 m³/hour total (minimum).
+  - Ships < 500 GT: 1 fire pump minimum. Emergency fire pump (independently powered) required.
+  - Fire main: continuous throughout accessible parts of ship. Cross-connections to bilge pump and general service pump where practicable.
+  - Fire hose: lengths of 15 m maximum; minimum 1 per 30 m of ship length; 1 additional for each fire hydrant in machinery spaces.
+  - Hydrant spacing: all accessible parts of ship within reach of fire hose not exceeding 40 m for dry hose, 20 m for jet.
+  - International shore connection: standard threaded female coupling on fire main for external supply.
+
+Regulation 13 — Means of Escape
+SOLAS Ch.II-2 Reg 13:
+  - Minimum two means of escape (stairways or ladders) from every accommodation space, crew working space, control station, and normally manned machinery space.
+  - One escape may be a scuttle (hatch) or a window.
+  - Stairways leading to boat deck or assembly station.
+  - Width of escape routes: minimum 900 mm.
+  - Height of doorways: minimum 1900 mm.
+
+Regulation 15 — Instructions, On-Board Training, and Drills
+SOLAS Ch.II-2 Reg 15: Fire drills: conducted within 24 hours of departing port. Frequency: once per month. Records in ship's log.
+  Fire damper operation test: at every drill. Fire door closing: quarterly manual test.
+
+Regulation 17 — Fixed Gas Fire Suppression Systems in Machinery Spaces
+SOLAS Ch.II-2 Reg 17 / FSS Code Annex: CO2, high-expansion foam, or water mist system in Category A machinery spaces (main propulsion, generating plant).
+  CO2 total quantity: for cargo ships, minimum CO2 volume = 85% of gross volume of largest protected space (total CO2 flooding concept).
+  For high-speed CO2 system: all CO2 to be released within 2 minutes (from remote pull station).
+  Pre-alarm: mechanical ventilation shutdown alarm before CO2 discharge.
+  Two-step release: first pull activates alarm and shuts ventilation; second pull releases CO2.
+
+Regulation 20 — Protection of Cargo Spaces
+SOLAS Ch.II-2 Reg 20: Fixed fire detection system in all cargo holds (cargo ships). Smoke or heat detection per FSS Code requirements.
+  Container ships: CO2 smothering system or equivalent in cargo holds.
+
+=============================================================================
+CHAPTER III — LIFE-SAVING APPLIANCES AND ARRANGEMENTS
+=============================================================================
+
+Regulation 17 — Liferaft Requirements (Cargo Ships)
+SOLAS Ch.III Reg 17: Total capacity of liferafts to accommodate entire ship's complement.
+  At least one liferaft on each side of ship capable of launching by fall.
+  Free-fall EPIRB-activated HRU hydrostatic release on all liferafts stowed in cradles.
+
+Regulation 18 — Lifeboat Requirements (Cargo Ships)
+  Cargo ships ≥ 85 m: totally enclosed lifeboats on each side of ship. Total capacity on each side = 50% of persons onboard (so aggregate = 100%).
+  Cargo ships < 85 m: open reversible liferaft or totally enclosed lifeboat on each side.
+  Free-fall lifeboat on stern optional.
+  Lifeboat launching: from stowed position to water ready for boarding in ≤ 10 minutes.
+  Lifeboat release: release under load at ≤ 200% of hook load. On-load release prohibited unless single point release fails or boat is waterborne.
+
+Regulation 26 — Rescue Boats
+SOLAS Ch.III Reg 26: At least 1 rescue boat on all cargo ships. Rescue boat to be rigid or inflatable with outboard motor.
+  Lowering time: ≤ 5 minutes from stowed position to waterborne.
+  Recovery: from water to stowed position: ≤ 10 minutes with full complement and equipment.
+
+Regulation 32 — Line-Throwing Apparatus
+SOLAS Ch.III Reg 32: Ship shall carry line-throwing apparatus capable of carrying a line accurately to at least 230 m. 4 complete sets.
+
+Regulation 35 — Manning of Survival Craft
+SOLAS Ch.III Reg 35: Each lifeboat shall have assigned coxswain and deputy coxswain. Crew qualified to operate and steer lifeboat. Training records maintained.
+
+=============================================================================
+CHAPTER IV — RADIOCOMMUNICATIONS
+=============================================================================
+
+Regulation 7 — Radio Installations
+SOLAS Ch.IV GMDSS: Radio equipment based on sea area:
+  Sea Area A1 (VHF coverage): DSC-capable VHF radio with DSC watch on Ch.70; portable VHF; SART or AIS-SART; 406 MHz EPIRB.
+  Sea Area A2 (MF coverage): additionally MF DSC radio on 2187.5 kHz; NAVTEX receiver or equivalent.
+  Sea Area A3 (INMARSAT coverage): additionally Inmarsat Fleet or compatible SES, or MF/HF SSB radio.
+  Sea Area A4 (Polar): MF/HF SSB radio with DSC; Iridium or similar LEOSAT system for polar communication.
+  GMDSS battery: 6 hours of full operation when main and emergency power unavailable. Test monthly.
+
+=============================================================================
+CHAPTER V — SAFETY OF NAVIGATION
+=============================================================================
+
+Regulation 15 — Principles Relating to Bridge Design
+SOLAS Ch.V Reg 15: Bridge design shall: provide unobstructed view all round; minimum dead angle ≤ 10° forward; total blind arc forward-of-beam ≤ 20°; bridge wings extend to ship side; all instruments clearly visible from conning position.
+
+Regulation 19 — Carriage Requirements for Shipborne Navigational Systems
+SOLAS Ch.V Reg 19:
+  All ships from 2002: AIS, GMDSS, ECDIS (for cargo ships ≥ 3000 GT from 2018).
+  Ships ≥ 150 GT on international voyages: magnetic compass; echo sounder; gyro compass (ships ≥ 500 GT); speed/distance log; VDR or S-VDR (ships ≥ 3000 GT).
+  Ships ≥ 500 GT: auto pilot; track control; ARPA (ships ≥ 10,000 GT).
+  BNWAS (Bridge Navigational Watch Alarm System): all ships ≥ 150 GT from 2011.
+
+=============================================================================
+CHAPTER IX — MANAGEMENT FOR THE SAFE OPERATION OF SHIPS (ISM CODE)
+=============================================================================
+
+Regulation 1: The International Safety Management Code (ISM Code) is mandatory for:
+  - Passenger ships including high-speed craft: from 1 July 1998.
+  - Oil/chemical/gas tankers, bulk carriers, high-speed cargo craft ≥ 500 GT: from 1 July 1998.
+  - Other cargo ships and mobile offshore units ≥ 500 GT: from 1 July 2002.
+
+ISM Code Elements:
+  1. Safety and environmental protection policy.
+  2. Company responsibilities and authority.
+  3. Designated person ashore (DPA).
+  4. Master's responsibility and authority.
+  5. Resources and personnel.
+  6. Plans for shipboard operations.
+  7. Emergency preparedness.
+  8. Reports and analysis of non-conformities, accidents, and hazardous occurrences.
+  9. Maintenance of the ship and equipment.
+  10. Documentation.
+  11. Company verification, review, and evaluation.
+  12. Certification, verification, and control.
+  DOC (Document of Compliance): issued to company by administration.
+  SMC (Safety Management Certificate): issued to ship.
+
+=============================================================================
+CHAPTER XI-1 — SPECIAL MEASURES TO ENHANCE MARITIME SAFETY
+=============================================================================
+
+Regulation 5 — Continuous Synopsis Record (CSR)
+SOLAS Ch.XI-1 Reg 5: Every ship shall carry a CSR recording ownership and management history. CSR to be made available to Port State Control on request.
+
+Regulation 3 — Ship Identification Number
+SOLAS Ch.XI-1 Reg 3: Ships shall be permanently marked with IMO Ship Identification Number (7-digit) on a visible location. Not changeable throughout ship's life.
+
+=============================================================================
+CHAPTER XI-2 — SPECIAL MEASURES TO ENHANCE MARITIME SECURITY (ISPS CODE)
+=============================================================================
+
+ISPS Code mandatory for:
+  - Cargo ships ≥ 500 GT on international voyages.
+  - Port facilities serving international ships.
+
+Requirements:
+  - Ship Security Plan (SSP): confidential. Covers security levels 1, 2, 3.
+  - Ship Security Officer (SSO): designated by master.
+  - Company Security Officer (CSO): designated by company.
+  - ISSC (International Ship Security Certificate): valid 5 years, issued after audit.
+  - AIS reporting: ship's ID, position, name, speed, course reported at intervals.
+  - Ship Security Alert System (SSAS): covert alert to CSO and Administration.

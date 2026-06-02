@@ -1,0 +1,167 @@
+IRS RULES FOR NAVAL SHIPS — 2024 EDITION
+NSQR VOLUME II — NAVAL STAFF QUALITATIVE REQUIREMENTS
+Indian Register of Shipping / Ministry of Defence (India)
+
+=============================================================================
+PART 1 — SCOPE AND APPLICABILITY
+=============================================================================
+
+1.1 These Rules apply to warships, survey vessels, patrol vessels, auxiliary naval vessels, and other craft procured by or for the Indian Navy and Indian Coast Guard and classed with IRS under the Naval Ship Rules.
+1.2 Naval vessels are subject to military environment additional to commercial merchant ship requirements. The Rules address: shock resistance (NSQR Grade A/B), electromagnetic compatibility (EMC), stealth (acoustic/magnetic/radar), nuclear/biological/chemical (NBC) protection, and damage control.
+1.3 Where not specifically stated otherwise, the requirements of IRS Rules for Merchant Ships (Parts 1–7) apply to naval ships as applicable.
+1.4 Classifications Notations: Naval Ship (NS); Patrol Vessel (PV); Fast Attack Craft (FAC); Survey Vessel (SV); Fleet Support (FS). Additional notations: Shock-Grade A, Shock-Grade B, EMC, ACS (Acoustic), MCS (Magnetic), NBC.
+
+=============================================================================
+PART 2 — STRUCTURAL REQUIREMENTS FOR NAVAL VESSELS
+=============================================================================
+
+Section 1 — Hull Structural Grade
+2.1.1 Naval vessels shall meet all IRS Part 3 Hull Structure requirements for the applicable ship length and type.
+2.1.2 Additional structural reserve factor for naval vessels: all scantlings to be increased by 10% over the merchant ship minimums to account for battle damage tolerance and weight margin for future system upgrades.
+2.1.3 Hull structural material: Grade D minimum for all primary structural members. Grade E for special category members. High-tensile steel (HT36 minimum) required for high-speed naval vessels where structural weight is critical.
+2.1.4 Blast-resistant construction: ships with missile launchers or cannon mounts shall have blast bulkheads with thickness minimum 20 mm HT36 steel protecting magazines and handling rooms.
+2.1.5 Splinter protection: magazine bulkheads, combat information centre (CIC) bulkheads, and bridge front bulkheads: minimum 12 mm HT36 or Kevlar/composite armour equivalent.
+2.1.6 Stability: naval vessels shall comply with damage stability requirements with flooding of any two adjacent compartments. Metacentric height GM ≥ 0.15 m in damaged condition.
+
+Section 2 — Foundations and Structural Interface with Combat Systems
+2.2.1 Weapon system foundations (gun mounts, missile launchers, torpedo tubes) shall be designed for the combined static weight and dynamic firing loads with safety factor 3.0 on ultimate load.
+2.2.2 Sonar dome structure: integral to hull or retractable bulge. Designed for hydrostatic pressure at maximum operating depth plus 25% safety factor. Sonar dome shell plating: 12 mm minimum HT36.
+2.2.3 Mast structures for sensor/radar platforms: designed for all wind and gyroscopic loads. Natural frequency of mast to be detuned ±15% from radar rotation rate.
+2.2.4 Stabilizer fin and retraction mechanism: designed for maximum hydrodynamic force at maximum speed. Structural continuity between fin foundation and hull frames.
+
+=============================================================================
+PART 3 — SHOCK QUALIFICATION REQUIREMENTS (NSQR GRADE A AND B)
+=============================================================================
+
+Section 1 — General Shock Philosophy
+3.1.1 Naval equipment is classified as Shock Grade A or Grade B based on criticality:
+  - Grade A: Equipment whose failure would directly result in loss of ship, loss of life, or inability to complete primary mission. Includes: main propulsion, steering, damage control, combat systems, navigation.
+  - Grade B: Equipment whose failure causes degraded but not lost capability. Includes: auxiliary machinery, non-critical electrical systems, habitability systems.
+3.1.2 All Grade A and Grade B equipment shall be evaluated for shock resistance by one of the following methods:
+  (a) Heavyweight shock test per MIL-S-901D (USA) or equivalent DGQA (India) standard.
+  (b) Dynamic shock analysis (FEA transient analysis with accepted shock input spectrum).
+  (c) Use of identical equipment previously shock-qualified to the required grade.
+3.1.3 Shock qualification shall be witnessed by DGQA/DGNP (Directorate General Naval Projects) and IRS.
+
+Section 2 — Heavyweight Shock Test (NSQR Grade A)
+3.2.1 Heavyweight shock test simulates near-miss underwater explosion. Test barge: floating barge with explosive charge at specified distance and depth below the test item.
+3.2.2 Test parameters (IRS Naval Rules / MIL-S-901D Grade A equivalent):
+  - Explosive charge: 60 kg TNT equivalent at 11 m depth, 3 m standoff (or equivalent scaled charge per ship displacement class)
+  - Required acceleration at equipment mounting: minimum peak 300g for Grade A items ≤ 250 kg; minimum 100g for items above 500 kg.
+  - Three shots minimum with item fully operational. Item shall continue to function after each shot.
+3.2.3 Failure criteria for Grade A shock test:
+  - Structural failure of equipment base or mounting structure.
+  - Electrical or control failure lasting more than 30 minutes (for repairable failure) or permanent (for non-repairable).
+  - Leakage of fluids from hydraulic/piping components.
+  - Loosening of fasteners by more than 15% of torque.
+3.2.4 Lightweight shock test for Grade B: floating platform test per MIL-S-901D Grade B equivalent. 1.36 kg TNT, 0.9 m standoff, standard barge.
+
+Section 3 — Shock-Isolating Mounts
+3.3.1 Shock-isolation mounts used to attenuate shock loads transmitted to equipment shall be:
+  (a) Type approved by IRS or DGQA for the applied static + dynamic load combination.
+  (b) Compatible with mount orientation (vertical, horizontal, 45°) and designed for correct pre-load.
+  (c) Not interchangeable with non-naval commercial vibration isolators.
+3.3.2 Mount selection: the mount natural frequency shall be ≤ 8 Hz in all loaded axes. Maximum transmissibility at resonance (amplification factor Q) ≤ 6.0.
+3.3.3 Mount installation: base plate thickness minimum 12 mm. Mounting bolts Grade 8.8 minimum. Torque retention check at 3-month intervals until commissioning.
+3.3.4 Re-qualification: if shock-isolation mounts are replaced by a different type or model, re-qualification of the mount system is required by IRS/DGQA before returning the equipment to Grade A status.
+3.3.5 Documentation: mount type, part number, serial number, approved test certificate reference, and orientation to be recorded in Ship's Particulars.
+
+Section 4 — Shock Dynamic Analysis (Alternative to Physical Test)
+3.4.1 Dynamic shock analysis acceptable for items that cannot be physically shock-tested (large structures, permanently installed systems).
+3.4.2 Shock input: DDAM (Dynamic Design Analysis Method per NRL Report 1396) or equivalent acceleration response spectrum approved by IRS/DGQA.
+3.4.3 FE model: full model of equipment including attachment points. Mesh size ≤ minimum feature size. Modal analysis followed by response spectrum analysis.
+3.4.4 Acceptance criteria: maximum principal stress ≤ 0.6 × UTS for structural members; 0.8 × yield for secondary items. Bolted connections: margin of safety ≥ 0.25 on shear and tension.
+
+=============================================================================
+PART 4 — ELECTROMAGNETIC COMPATIBILITY (EMC) REQUIREMENTS
+=============================================================================
+
+Section 1 — General EMC Standards
+4.1.1 All electrical and electronic equipment on naval vessels shall comply with DEF STAN 59-411 Parts 1–4 (UK MoD) or MIL-STD-461G (US MIL) as accepted by Indian Navy / DGQA.
+4.1.2 Ship-level EMC programme: Electromagnetic Environmental Effects (E3) analysis to be conducted at design stage identifying all emitters, susceptible equipment, and coupling paths.
+4.1.3 Frequency allocation plan: all RF transmitters (radar, communication, ECM) to be de-conflicted to prevent mutual interference. Guard bands per ITU Radio Regulations.
+
+Section 2 — Cable Segregation and Screening
+4.2.1 Cable categories for naval vessels:
+  - Category A: Power cables (HV and LV) — unscreened, run in steel trays.
+  - Category B: Control and monitoring cables — screened (minimum 90% optical coverage), run in separate trays.
+  - Category C: Navigation and combat system data cables — double-screened (both ends earthed), run in dedicated separated trays or conduits.
+  - Category D: Sensitive sensor cables (sonar, radar) — quad-screened or coaxial, run in conduit or armoured trunking.
+4.2.2 Segregation distances between cable categories:
+  - A and B: minimum 100 mm air gap or steel partition.
+  - A and C: minimum 200 mm air gap or steel partition.
+  - B and C: minimum 100 mm air gap when parallel run exceeds 2 m.
+  - All categories from hull return buses: minimum 50 mm.
+4.2.3 Hull return circuits prohibited for all Category B, C, D circuits. Two-wire (and multi-wire) return circuits mandatory. Exception: hull earth bonds (not signal returns).
+4.2.4 Cable screen bonding resistance: measured from screen to nearest hull earth point. Acceptance criterion: ≤ 2.5 mΩ. Measurement method: 4-wire micro-ohmmeter. Test at installation and repeat every 2 years.
+
+Section 3 — Earthing and Bonding
+4.3.1 Equipment frames (metallic enclosures) shall be bonded to hull earth. Bond strap minimum 16 mm² copper or equivalent. Resistance ≤ 10 mΩ from frame to hull.
+4.3.2 Hull return main busbar: distributed through ship in machinery spaces. Busbar minimum 30 mm × 10 mm copper section. Multiple connections to hull shell in engine room.
+4.3.3 Sensitive equipment (navigation, combat, ECM) to be connected to isolated earth bus via isolation inductors where hull earth noise is a problem. Isolation inductors: ≥ 1 mH at 1 MHz.
+4.3.4 RF earth: transmitter antenna earthing to dedicated RF earth busbar separate from power earth. RF earth resistance to hull ≤ 1 mΩ.
+
+Section 4 — Radiated Emissions Control
+4.4.1 Radar cross-section (RCS) management: superstructure design to incorporate angular faces (15–20° from vertical) to deflect radar reflections. No large orthogonal flat surfaces.
+4.4.2 IR signature management: funnel design to mix hot gas with ambient air before exhaust exit. Gas temperature at funnel outlet ≤ 200°C for primary signature management.
+4.4.3 Light discipline: red light fittings in all spaces for night operations. External lights operable through central dimmer system.
+
+=============================================================================
+PART 5 — ACOUSTIC SIGNATURE MANAGEMENT (NSQR — ACS NOTATION)
+=============================================================================
+
+Section 1 — Airborne Noise (Radiated Acoustic)
+5.1.1 Ships with ACS notation shall meet radiated noise levels at defined ranges per ANECIC or equivalent standard accepted by Indian Navy.
+5.1.2 Primary noise sources for control:
+  - Main propulsion machinery (diesel engine, gearbox, generator sets): vibration isolation mandatory.
+  - Propeller: design for minimum cavitation inception speed (CIS) above maximum operational speed.
+  - Auxiliary machinery (fans, pumps, compressors): vibration isolation required for all units above 5 kW.
+5.1.3 Floating decks: machinery spaces on naval vessels with ACS notation shall have floating deck arrangements (acoustic mounts between structural deck and machinery flat). Double isolation where required.
+5.1.4 Structureborne noise path: all machinery connected to hull via resilient mounts. Acoustic flanking paths (rigid pipe connections, rigid cable runs) to be broken with flexible joints.
+
+Section 2 — Propeller Noise
+5.2.1 Propeller blade count to be selected to avoid blade-rate frequency coinciding with hull natural frequency. Minimum clearance: 10% between hull frequency and blade-rate at maximum RPM.
+5.2.2 Propeller tip clearance minimum 25% of propeller diameter for noise control (exceeds structural minimum of 15%).
+5.2.3 Wake-adapted propeller design: non-uniform pitch distribution. Skew angle 30–45° for noise reduction.
+5.2.4 Acoustic sea trials: 6-point measurement as per ANEP-61/NAV/DGSN requirements.
+
+=============================================================================
+PART 6 — MAGNETIC SIGNATURE MANAGEMENT (MCS NOTATION)
+=============================================================================
+
+6.1.1 Ship's magnetic signature (degaussing) system shall comply with STANAG 1141 or Indian Navy DGSN specification.
+6.1.2 Degaussing coils: M, FQ, and L coils fitted for full magnetic signature control in all three axes.
+6.1.3 Coil current settings shall be calculated from magnetometer measurements during building. Commissioning calibration at degaussing range.
+6.1.4 Magnetic influence mine safety: ship's total field at the keel to be reduced below the threshold defined by the operational authority. Documentation in Magnetic Log Book.
+6.1.5 AMMIS (Automatic Magnetic Monitoring and Influencing System): automated coil current adjustment based on ship's heading and latitude. For ships with MCS(A) notation.
+
+=============================================================================
+PART 7 — DAMAGE CONTROL AND WATERTIGHT INTEGRITY
+=============================================================================
+
+7.1.1 Naval vessel damage control philosophy: preserve fighting capability after underwater weapon or air weapon hit. Design for survival after any single compartment flooding.
+7.1.2 Damage control station: dedicated manned space with DC plant (portable pumps, plugging materials, shore connections). Location to be below waterline with secondary access.
+7.1.3 Cross-flooding arrangements: fitted between symmetrical tanks to limit heel after asymmetric flooding. Cross-flood pipes minimum 200 mm bore. Valve operable remotely from bridge and damage control station.
+7.1.4 Flooding detection: liquid level sensors in all void spaces and ballast tanks. Alarm to bridge and damage control station within 2 minutes of flooding commencement.
+7.1.5 Ship survivability calculation: FORTAN or equivalent assessment for all considered damage scenarios. Residual stability GM_damaged ≥ 0.15 m. Maximum heel ≤ 15° in damaged condition.
+7.1.6 Watertight door closing: all watertight doors capable of being closed remotely from centralized damage control panel within 60 seconds. Doors with hydraulic actuators.
+
+=============================================================================
+PART 8 — NBC PROTECTION (NUCLEAR-BIOLOGICAL-CHEMICAL)
+=============================================================================
+
+8.1.1 Ships with NBC notation shall have a citadel (positive-pressure clean air zone protecting crew).
+8.1.2 Citadel boundaries: watertight and airtight bulkheads. Sealing of all penetrations including cable and pipe transits. Air locks at all citadel entries.
+8.1.3 HVAC for citadel: dedicated HEPA and charcoal filter system. Positive pressure 25 Pa above ambient maintained. Air change rate minimum 6 per hour in citadel.
+8.1.4 NBC monitoring: automatic chemical detector (nerve agent, blister agent, TIC) sampling at all citadel HVAC inlets. Radiological detector at superstructure.
+8.1.5 Decontamination: wash-down system covering all external surfaces of superstructure. Flow rate minimum 5 l/m²/min. Salt water source from fire main.
+
+=============================================================================
+PART 9 — EMERGENCY DIESEL GENERATOR AND CRITICAL SERVICES
+=============================================================================
+
+9.1.1 Emergency generator: sized for critical naval loads including combat systems, navigation, damage control, internal communications, and DC lighting.
+9.1.2 Emergency generator starting: automatic start within 30 seconds of main power failure. Hot standby diesel (fuel warmed, coolant warmed).
+9.1.3 Uninterruptible power supply (UPS): 30-minute minimum battery autonomy for combat systems, navigation, and communications.
+9.1.4 Shore power connection: fitted for all naval vessels. With phase sequence check and voltage compatibility interlock.
+9.1.5 Vital services: propulsion control, steering gear, damage control pumps, fire fighting pumps, combat system power supplies, and navigation defined as "vital" — supplied from both main and emergency busbars via automatic changeover.

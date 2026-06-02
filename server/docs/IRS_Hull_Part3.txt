@@ -1,0 +1,295 @@
+IRS RULES AND REGULATIONS — 2024 EDITION
+PART 3 — HULL STRUCTURES
+Indian Register of Shipping
+
+=============================================================================
+CHAPTER 1 — GENERAL
+=============================================================================
+
+Section 1 — Scope and Application
+1.1.1 These Rules apply to the hull structures of steel seagoing ships intended to be classed with Indian Register of Shipping (IRS). Ships constructed under survey and classed by IRS shall comply with all applicable requirements of Part 3.
+1.1.2 Structural designs departing from these requirements may be approved if demonstrated to offer equivalent safety through direct structural analysis accepted by IRS.
+1.1.3 These rules apply to ships of 24 m length and above engaged on seagoing voyages. For ships under 24 m, IRS may waive or modify requirements as appropriate.
+1.1.4 Where high-tensile steel is used in lieu of normal mild steel, the scantlings shall be adjusted using the material factor k = (235/ReH) where ReH is the specified minimum yield strength in N/mm².
+
+Section 2 — Definitions
+1.2.1 Rule Length L: 96% of the total waterplane length on a waterline at 85% of the least moulded depth, or the length from the foreside of the stem to the axis of the rudder stock on that waterline, whichever is greater. Minimum rule length 24 m.
+1.2.2 Breadth B: Greatest moulded breadth measured amidships at or below the deepest subdivision load line.
+1.2.3 Moulded Depth D: Moulded depth at amidships from top of keel to top of freeboard deck beam at side.
+1.2.4 Draught T: Moulded draught to the deepest subdivision load line from top of keel.
+1.2.5 Block Coefficient Cb: Cb = Displacement / (L × B × T × ρ). Where Cb < 0.6 use Cb = 0.6 for scantling calculations.
+1.2.6 Standard Frame Spacing s: s = (L/4 + 100) mm, minimum 450 mm, maximum 900 mm. In forward quarter-length and engine room: s × 0.75.
+1.2.7 Forecastle Deck: Any partial superstructure at the bow above freeboard deck.
+1.2.8 Floodable Length: Maximum length of a compartment such that, after assumed flooding, the resulting waterline does not reach the margin line.
+
+Section 3 — Survey at Construction
+1.3.1 Plans required for approval: general arrangement, midship section, shell expansion, structural drawings for all decks, double bottom, bulkheads, engine room, stern frame, stem, and rudder.
+1.3.2 Survey stages: material testing and certification; keel-laying; frame erection; main structural welds; launching; inclination test; sea trials; final survey.
+1.3.3 IRS surveyor shall witness: keel laying, launching, inclination test, sea trials, final inspection.
+1.3.4 Weld inspection reports, NDT records, and material certificates shall be submitted and accepted before classification is granted.
+
+=============================================================================
+CHAPTER 2 — MATERIALS FOR HULL CONSTRUCTION
+=============================================================================
+
+Section 1 — Structural Steel Grades
+2.1.1 Structural steel shall comply with IRS Chapter 2 (aligned with IACS UR S6). Grades designated A, B, D, E for normal strength (yield ReH ≥ 235 N/mm²) and AH, DH, EH, FH for high tensile steel.
+2.1.2 Normal Strength Steel Grades:
+  - Grade A: Impact test not required. For t ≤ 50 mm.
+  - Grade B: Impact test 0°C, 27 J minimum average. For t ≤ 50 mm.
+  - Grade D: Impact test -20°C, 27 J minimum average. For t ≤ 50 mm.
+  - Grade E: Impact test -40°C, 27 J minimum average. For t ≤ 50 mm.
+2.1.3 High Tensile Steel Grades (ReH ≥ 315 N/mm² for HT32; ReH ≥ 355 N/mm² for HT36; ReH ≥ 390 N/mm² for HT40):
+  - Grade AH32/36/40: No impact test required. Yield ReH ≥ 315/355/390 N/mm².
+  - Grade DH32/36/40: Impact test -20°C, 31 J minimum average.
+  - Grade EH32/36/40: Impact test -40°C, 31 J minimum average.
+  - Grade FH32/36/40: Impact test -60°C, 31 J minimum average.
+2.1.4 Structural member categories and minimum steel grades (IACS UR S6 Table):
+  Category I (Special): Strength deck stringer plates amidships; sheer strakes adjacent to strength deck; horizontal girder plates of main transverse frames above 0.15D from keel; inner bottom longitudinals amidships in way of hopper plates. Grade E/EH required for t > 30 mm.
+  Category II (Primary): Strength deck plating within 0.1B of centreline amidships; bulkhead strakes adjacent to strength deck amidships; side shell at forecastle deck. Grade D/DH required for t > 25 mm.
+  Category III (Secondary): All other structural members. Grade A acceptable up to 50 mm.
+2.1.5 Z-grade (through-thickness property) steel with ZA, ZB, ZC classification per minimum reduction of area on transverse tensile test (ZA: 10% min, ZB: 15% min, ZC: 25% min) is required for through-thickness loaded joints where plate t > 50 mm or where calculation indicates through-thickness stress exceeds 100 N/mm².
+2.1.6 All steel shall be supplied with mill certificates (Type 3.1 per EN 10204 or equivalent) identifying: heat/cast number, chemical composition, mechanical test results (yield, UTS, elongation, Charpy), and dimensional inspection.
+
+Section 2 — Welding Consumables
+2.2.1 Welding consumables shall be approved by IRS or accepted Classification Society. Type approval testing per IACS UR W0.
+2.2.2 Consumable grades shall be matched to the base metal grade: Grade 1 consumables for Grade A; Grade 2 for Grade B; Grade 3 for Grade D; Grade 4 for Grade E. High-tensile consumables approved for HT grades.
+
+=============================================================================
+CHAPTER 3 — DIRECT CALCULATION AND STRUCTURAL ANALYSIS
+=============================================================================
+
+3.1.1 Scantlings may be determined by rule formulas, direct FE analysis, or a combination.
+3.1.2 Allowable stress levels for direct calculation:
+  - Hull girder normal stress (bending): σ_allow = ReH / 1.75 (mild steel: 134 N/mm²)
+  - Lateral pressure primary members: σ_allow = ReH / 1.35 (mild steel: 174 N/mm²)
+  - Combined stress (bending + lateral): σ_allow = ReH / 1.60
+  - Shear stress: τ_allow = 0.35 × ReH (mild steel: 82 N/mm²)
+3.1.3 Buckling: all plating panels and stiffened panels shall satisfy the critical buckling stress criteria. Euler buckling calculation using net plate thickness and appropriate boundary conditions.
+3.1.4 Fatigue assessment required for ships L > 150 m and for novel structural details. Fatigue life target: 25 years at North Atlantic scatter diagram or equivalent.
+3.1.5 Global FE model mesh: element size ≤ frame spacing × 1.5 for global model; ≤ minimum plate thickness for local fine-mesh models.
+
+=============================================================================
+CHAPTER 4 — BOTTOM STRUCTURE
+=============================================================================
+
+Section 1 — Flat-plate Keel
+4.1.1 Flat-plate keel shall extend full length of ship. Minimum breadth:
+  - L > 120 m: breadth = 1200 mm
+  - 80 m < L ≤ 120 m: breadth = 900 mm
+  - L ≤ 80 m: breadth = 800 mm
+4.1.2 Keel plate minimum thickness: 1.5 × t_bottom + 2.0 mm. For L > 120 m: not less than 16 mm.
+4.1.3 Bar keel permitted for small vessels (L < 50 m). Cross-section area not less than 60 × t_keel mm².
+
+Section 2 — Double Bottom Construction
+4.2.1 An efficient double bottom shall be fitted from collision bulkhead to after peak bulkhead for all ships L > 50 m. Height of inner bottom (double bottom depth) h_DB:
+  - B ≤ 5 m: h_DB = 0.5 m minimum
+  - 5 m < B ≤ 20 m: h_DB = B/20 m
+  - B > 20 m: h_DB = 1.0 m minimum (maximum required: 2.0 m)
+4.2.2 Inner bottom plating minimum thickness (cargo holds): t = 1.21 × s_bf × √(p_DB / 175) + t_c mm
+  Where s_bf = floor spacing (m), p_DB = design pressure at inner bottom (kPa), t_c = 1.5 mm corrosion addition.
+4.2.3 Centre girder (centreline) shall be continuous throughout double bottom length. Minimum plate thickness of centre girder: t_CG = 0.065L + 7.0 mm (minimum 8 mm). Lightening holes not permitted in way of solid floors.
+4.2.4 Side girders: fitted at intervals not exceeding 4.5 m measured from centreline. Minimum one side girder each side in double bottom. Same thickness as centre girder in machinery space, 1.5 mm less acceptable in cargo holds.
+4.2.5 Solid floors: required at every frame space in machinery space; at all main transverse bulkheads; in way of machinery seatings; in way of anchor cable pipes. Minimum plate thickness: t_floor = 0.05L + 6.5 mm. Height of floor plate = double bottom depth with drain and air holes.
+4.2.6 Bracket floors permitted between solid floors in cargo holds. Bracket arm length not less than 0.4 × floor depth. Not more than 2 bracket floor spans between solid floors.
+4.2.7 Drain holes at all low points minimum 50 mm diameter. Access holes minimum 450 × 600 mm with rounded corners radius ≥ 25 mm. Air holes minimum 50 mm diameter.
+4.2.8 Suction bell-mouthed bilge well in each watertight compartment. Bilge suction pipe to reach within 50 mm of bottom of well. Well volume minimum 15 litres per metre of ship length.
+
+Section 3 — Bottom Shell Plating
+4.3.1 Minimum bottom shell plating thickness (below deepest load waterline):
+  - L ≤ 50 m: t = 5.5 + 0.045L mm
+  - 50 m < L ≤ 90 m: t = 7.5 + 0.015L mm
+  - 90 m < L ≤ 120 m: t = 13.0 mm (2024 revision; previously 12.5 mm for L ≤ 120 m)
+  - 120 m < L ≤ 200 m: t = 14.0 mm
+  - L > 200 m: t per direct calculation, minimum 14.0 mm
+4.3.2 Corrosion additions t_c: 1.0 mm for surfaces coated and accessible; 1.5 mm for surfaces coated but not accessible; 2.5 mm for surfaces without coating (not acceptable for new build except special approval).
+4.3.3 Keel area and bilge keel attachment strakes: + 1.0 mm over the minimum formula value.
+
+=============================================================================
+CHAPTER 5 — LONGITUDINAL STRENGTH
+=============================================================================
+
+Section 1 — Still-Water Loads
+5.1.1 Still-water bending moment (SWBM) envelopes shall be calculated for all loading conditions including: full departure, full arrival, ballast departure, ballast arrival, alternate hold, partial load, harbour condition.
+5.1.2 Maximum permissible still-water bending moment M_SW,perm at midship:
+  M_SW,perm = σ_perm × SM_min / y_NA kN·m
+  where σ_perm = 175/k N/mm² (k = material factor), SM_min = required midship section modulus, y_NA = distance neutral axis to extreme fibre.
+5.1.3 Still-water shear force Q_SW,perm at any cross-section:
+  Q_SW,perm = τ_perm × A_shear kN
+  where τ_perm = 0.35 × ReH N/mm², A_shear = shear area of web plates.
+
+Section 2 — Wave Loads
+5.2.1 Vertical wave bending moment at amidships M_WV:
+  Hogging: M_WV,H = +0.19 × C_W × L² × B × (C_b + 0.7) × f_1 kN·m
+  Sagging: M_WV,S = -0.11 × C_W × L² × B × (C_b + 0.7) × f_1 kN·m
+  C_W = wave coefficient = 10.75 − ((300 − L)/100)^1.5 for 100 m ≤ L ≤ 300 m; = 10.75 for 300 m < L ≤ 350 m.
+  f_1 = distribution factor along ship length (= 1.0 at amidships, reduces toward ends).
+5.2.2 Horizontal wave bending moment for ships with large deck openings: M_WH = 0.16 × L^1.4 × B² × Cb kN·m.
+5.2.3 Wave torsional moment: applies to open cross-section ships. Calculated per direct analysis.
+
+Section 3 — Required Section Modulus
+5.3.1 Required midship section modulus (net):
+  SM_REQ = (M_SW + M_WV) / σ_perm × 10³ cm³
+  σ_perm = 175/k N/mm² (normal steel k = 1.0, HT32 k = 0.78, HT36 k = 0.72).
+5.3.2 Midship section modulus shall not be less than:
+  SM_min = 0.01 × C_W × L² × B × (4.1 C_b + 0.7) cm³ (absolute minimum per IACS UR S7).
+5.3.3 Section modulus at any cross-section within midship 0.4L shall not be less than 85% of midship SM_REQ.
+5.3.4 Effective members contributing to section modulus: strength deck plating; sheer strake; side shell within effective breadth; longitudinal stringer plates; inner bottom; longitudinal bulkheads within effective breadth; longitudinal frames and stiffeners on contributing plates.
+5.3.5 Corrosion deductions from gross scantlings: t_c to be deducted from all structural members when calculating section modulus.
+
+Section 4 — Shear Strength
+5.4.1 Net shear area A_s at any transverse cross-section:
+  A_s,net ≥ (Q_SW + Q_WV) / τ_permit cm²
+  τ_permit = 0.35 × ReH N/mm²
+5.4.2 Shear area contributed by: side shell; longitudinal bulkheads; inner bottom connections at sides; web of double bottom girders at sides.
+5.4.3 Shear force redistribution: in ships with wide longitudinal bulkheads, shear force distribution between shell and bulkhead calculated per accepted method.
+
+=============================================================================
+CHAPTER 6 — WATERTIGHT INTEGRITY AND SUBDIVISION
+=============================================================================
+
+Section 1 — Watertight Bulkheads
+6.1.1 Minimum watertight bulkheads required:
+  (a) Collision bulkhead: position minimum 0.05L and maximum 0.08L from FP. For L > 200 m: minimum 10 m from FP and between 0.05L and 0.08L + 1.0 m. For L ≤ 200 m: within 0.05L to (0.08L + 1.0 m).
+  (b) After peak bulkhead: encloses sterntube and stern arrangement, extends to freeboard deck.
+  (c) Engine room forward and aft bulkheads.
+  (d) Additional bulkheads as required by subdivision calculation (SOLAS Ch.II-1).
+6.1.2 Spacing between transverse watertight bulkheads shall not exceed 30 frame spaces unless supported by structural analysis.
+6.1.3 Watertight bulkhead plating minimum thickness:
+  t_BHD = 1.21 × s × √(h_d × ρ / (10 × k_s)) + t_c mm
+  where s = stiffener spacing (m), h_d = design head from top of bulkhead to waterline (m), k_s = allowable stress factor (0.60 for stiffened panels), t_c = corrosion addition 1.5 mm. Absolute minimum 6.0 mm.
+6.1.4 Stiffener on watertight bulkhead: fixed-end beam calculation. Stiffener section modulus:
+  Z = (83 × s × l² × p_d) / σ_allow cm³
+  where l = stiffener span (m), p_d = design pressure (kPa), σ_allow = 120 N/mm² normal steel.
+6.1.5 Web frame / transverse girder arrangement where stiffener span exceeds 3.0 m.
+6.1.6 Watertight doors shall be of type approved by IRS. Sliding watertight doors in passenger spaces shall be power-operated and operable from both sides and from control station.
+6.1.7 Pipe penetrations through watertight bulkheads: use IRS-approved cable/pipe transit frames. Penetrations to be recorded on "watertight penetration schedule" drawing and approved.
+
+Section 2 — Collision Bulkhead
+6.2.1 Collision bulkhead extends to freeboard deck and is watertight to that deck. If raised forecastle connected to freeboard deck by access, extends weathertight to forecastle deck.
+6.2.2 No doors, manholes, or access openings below freeboard deck in collision bulkhead. Manholes above waterline may be permitted with substantial bolted covers.
+6.2.3 Not more than one pipe may pass through collision bulkhead. Valve controlling this pipe shall be operable from above the freeboard deck and shall be a screw-down type.
+6.2.4 Anchor hawse pipes shall not pass through the collision bulkhead for ships L > 100 m on international voyages.
+
+Section 3 — Watertight Testing
+6.3.1 All watertight and weathertight structure shall be tested by:
+  - Hydraulic (flood) test: fill to design head of water. Preferred method for tanks and void spaces.
+  - Hose test: minimum 200 kPa at nozzle, nozzle ≤ 1.5 m from structure, continuous jet. For exposed decks and hatch coamings.
+  - Air test: pressurize space to 0.15 bar gauge. Use leak-detection soap solution on all welds. For inaccessible double bottom spaces.
+  - Chalk test: not acceptable for Class purposes — for shipyard quality check only.
+6.3.2 Hydraulic test mandatory for: double bottom tanks, peaks, cofferdams, deep tanks, fuel oil tanks, ballast tanks.
+6.3.3 Testing certificate shall be issued by IRS surveyor after witnessing or auditing test results.
+
+=============================================================================
+CHAPTER 7 — DECK STRUCTURE
+=============================================================================
+
+Section 1 — Strength Deck Plating
+7.1.1 Minimum strength deck plating thickness:
+  - L ≤ 60 m: t = 5.0 mm
+  - 60 m < L ≤ 120 m: t = 0.02L + 3.5 mm
+  - 120 m < L ≤ 200 m: t = 0.015L + 4.1 mm
+  - L > 200 m: per direct calculation, minimum 11.0 mm
+7.1.2 Weather-exposed decks: add 1.5 mm to formula minimum.
+7.1.3 Hatch coaming plates/insert plates at corners: t = t_deck + 2.5 mm.
+7.1.4 Deck camber and sheer: standard camber = B/50, standard sheer = 25(0.5 + L/200) mm at FP, sheer at AP = half of forward sheer.
+7.1.5 Strength deck stringer plates amidships: Special Category per 2.1.4. Grade D minimum for t > 25 mm, Grade E for t > 30 mm.
+
+Section 2 — Deck Beams and Girders
+7.2.1 Transverse deck beams: spaced at every frame in cargo holds and machinery spaces.
+7.2.2 Deck girders: continuous or effectively bracketed. Section modulus per beam formula accounting for cargo deck load, cargo weight, sea load.
+7.2.3 Pillars (deck stanchions): slenderness ratio ≤ 60 (l/r ≤ 60). Permissible stress per Rankine-Gordon column formula.
+
+Section 3 — Hatch Covers and Coamings
+7.3.1 Hatch covers shall be designed per IACS UR S21 Unified Requirement. Design load p_h (kN/m²):
+  - Exposed freeboard deck forward 0.25L: p_h = 34.3 + 0.0 kN/m² (standard), or 49.0 kN/m² (heavy)
+  - Exposed freeboard deck aft 0.25L to 0.5L: p_h = 24.5 kN/m²
+7.3.2 Hatch coaming minimum height: 600 mm (exposed freeboard deck), 450 mm (superstructure deck), 300 mm (second tier superstructure).
+7.3.3 Steel folding or lift-away hatch covers with rubber gasket seal. Compression of gasket when closed and locked: 20–30% of free height. Drain channels to overboard.
+7.3.4 Pontoon-type steel hatch covers shall be designed with plate and stiffener system verified by direct calculation against the IACS UR S21 wave load.
+
+=============================================================================
+CHAPTER 8 — SHELL PLATING AND STERN STRUCTURE
+=============================================================================
+
+Section 1 — Side Shell
+8.1.1 Side shell plating minimum thickness:
+  Above waterline: t = 0.02L + 5.5 mm (minimum 5.5 mm for L ≤ 50 m)
+  Below waterline: t = 0.02L + 6.5 mm (minimum 6.5 mm for L ≤ 50 m)
+  In way of forecastle: t = t_side × 1.1 minimum.
+8.1.2 Sheer strake minimum thickness: t_sheer = max(t_deck, t_side) + 1.5 mm. For L > 90 m: t_sheer ≥ 14.0 mm.
+8.1.3 Bilge strake: t_bilge = max(t_bottom, t_side) + 1.5 mm. Minimum 11.0 mm.
+8.1.4 Side frames (transverse or longitudinal system): scantlings per formula accounting for design lateral pressure from sea and internal liquid (if applicable).
+
+Section 2 — Stem and Bow Structure
+8.2.1 Stem: solid bar, casting, or welded built-up section. Section modulus at any cross-section not less than calculated per IRS rule formula. Minimum width at FP: 125 mm.
+8.2.2 Fore peak structure: heavy longitudinal framing in way of anchoring arrangement. Extra frames or solid plates in way of anchor pockets.
+8.2.3 Bow thruster tunnels: tunnel edges to be reinforced. Additional framing in way of tunnel intersection with shell.
+
+Section 3 — Sternframe, Rudder, and Sterntube
+8.3.1 Sternframe: cast or fabricated steel. Must support propeller shaft, rudder pintles, and mooring arrangements. Designed for propeller blade tip clearance minimum 15% of propeller diameter.
+8.3.2 Rudder stock minimum diameter per IRS formula:
+  d_s = (4.2 × M_T / τ_allow)^(1/3) mm
+  where M_T = total torque on stock (N·mm), τ_allow = 0.35 × ReH (N/mm²).
+8.3.3 Rudder design: couple rudder for ships L > 100 m. Maximum rudder angle: 35° each side. Clearance between rudder and sternframe: ≥ 30 mm.
+8.3.4 Rudder plating minimum thickness: as per formula for design water pressure head.
+8.3.5 Sterntube bearings: forward and aft bearings. Oil-lubricated type with aft seal or water-lubricated with cutlass bearings. Bearing length ≥ 4 × sterntube bore diameter. Stern gland to be type approved.
+
+=============================================================================
+CHAPTER 9 — STRUCTURAL WELDING REQUIREMENTS
+=============================================================================
+
+Section 1 — General Weld Design
+9.1.1 Welding procedures shall be qualified per IACS UR W28 / IRS equivalent. Weld Procedure Specification (WPS) and Procedure Qualification Records (PQR) required for all structural weld categories.
+9.1.2 Welders shall hold current certificates per IACS UR W7 / IRS welding examination. Certificate scope and validity per ISO 9606-1 or ASME Section IX.
+9.1.3 Full penetration welds required for:
+  - All T-connections of primary structural members (floors to girders, transverse frames to shell, longitudinals to transverses)
+  - All connections of watertight structure at intersections
+  - Bracket connections to primary members
+  - Keel butt welds
+9.1.4 Fillet welds for non-structural connections: effective throat t_eff ≥ 0.44 × t_thin (t_thin = thinner plate at joint), minimum 3 mm.
+9.1.5 Intermittent welds prohibited for: watertight connections, strength deck amidships, shell plating below waterline, bracket toes in way of longitudinal strength members.
+
+Section 2 — NDT Requirements
+9.2.1 Non-destructive testing (NDT) requirements:
+  - Keel plate butt welds: 100% RT or UT.
+  - Shell plating butt welds below waterline: 100% RT or UT.
+  - Strength deck butt welds amidships 0.4L: 100% UT.
+  - All full penetration T-welds in primary structure: 25% UT (100% at surveyor's discretion for critical areas).
+  - Machinery foundation welds (propulsion motors, main engine, gearbox): 100% MT/PT on all welds and 100% UT on all full-penetration welds.
+  - Weld repairs: 100% NDT on repaired weld.
+9.2.2 NDT operators: Level II certification minimum per ISO 9712 or equivalent (BINDT Level 2, ASNT Level II).
+9.2.3 Radiographic (RT) acceptance criteria per IRS or IACS UR Class accepted standard (ASME Section V + VIII, or equivalent EN/ISO standard).
+9.2.4 UT acceptance criteria: amplitude 20% DAC minimum for reporting; evaluation per DGS diagram or DAC method. Flaws exceeding acceptance limits require repair.
+
+=============================================================================
+CHAPTER 10 — SUPERSTRUCTURES AND DECKHOUSES
+=============================================================================
+
+10.1.1 Superstructures contributing to longitudinal strength shall be included in the midship section modulus calculation. End connections shall transmit the calculated longitudinal stress.
+10.1.2 End bulkheads of superstructures: thickness per lateral pressure formula for wave slap and green water on deck. Minimum thickness: 6.0 mm. End bulkheads to be fitted with adequate stiffening.
+10.1.3 Portholes and windows in exposed superstructure sides: area not to exceed 3 m² each. Frames to be watertight. Deadlights/storm covers required below freeboard deck.
+10.1.4 Deckhouse foundations: continuous welded to deck. Thickness matching deckhouse side plating.
+10.1.5 Lifting points, crane pedestals, and heavy equipment foundations on decks: local reinforcement using doubler plates and/or insert plates. Direct calculation of foundation scantlings for dynamic loads.
+
+=============================================================================
+CHAPTER 11 — MACHINERY SPACE STRUCTURE
+=============================================================================
+
+11.1.1 Engine room structure shall accommodate all machinery loadings including propulsion unit (main engine, gearbox, shaft) dynamic forces.
+11.1.2 Main engine seating: chock-type or epoxy resin chocks. Foundation plate thickness minimum 25 mm (continuous bottom plate). Side brackets to shell frames using deep-web brackets.
+11.1.3 Machinery space bottom structure: solid floors at every frame. Double bottom height not less than values in 4.2.1. Inner bottom plating in way of machinery space: formula per 4.2.2 but p_DB increased for machinery weight.
+11.1.4 Shaft tunnel: continuous from after peak bulkhead to engine room. Tunnel walls minimum 8 mm thickness. Watertight access to shaft tunnel with gland packing at aft peak bulkhead penetration.
+11.1.5 Propeller shaft seating and sterntube: per Chapter 8 Section 3.
+11.1.6 Machinery space openings (boiler uptakes, funnel, ventilation trunks): reinforced with coamings and brackets. Cutouts in deck structural members to be reinforced with doubler plates.
+
+=============================================================================
+APPENDIX — IRS 2024 AMENDMENT SUMMARY (MAJOR CHANGES FROM 2022)
+=============================================================================
+
+A1. Shell plating minimum thickness for 90 m < L ≤ 120 m: increased from 12.5 mm to 13.0 mm.
+A2. NDT for strength deck welds amidships: mandatory UT 100% (previously 25%).
+A3. Z-grade steel trigger: reduced from 60 mm to 50 mm plate thickness.
+A4. Double bottom minimum height formula: unchanged; however, guidance note added requiring documentation of inner bottom access paths.
+A5. Hatch cover design load: aligned with IACS UR S21 rev.3 without derogation.
+A6. Material certificate requirement: Type 3.1 mill certificates mandatory; Type 2.2 no longer accepted for hull structural steel.

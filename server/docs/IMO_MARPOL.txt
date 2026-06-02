@@ -1,0 +1,202 @@
+INTERNATIONAL MARITIME ORGANIZATION
+MARPOL 73/78 — CONSOLIDATED EDITION 2017 (as amended to 2024)
+Convention on the Prevention of Pollution from Ships
+IMO Publication ISBN 978-92-801-1628-6
+
+=============================================================================
+ANNEX I — REGULATIONS FOR THE PREVENTION OF POLLUTION BY OIL
+=============================================================================
+
+Chapter 1 — General
+
+Regulation 1 — Definitions
+MARPOL Annex I Reg 1: Key Definitions:
+  - Oil: petroleum in any form including crude oil, fuel oil, sludge, oil refuse, and refined products.
+  - Oily mixture: any mixture containing oil.
+  - Oil tanker: any ship constructed or adapted primarily to carry oil in bulk.
+  - Combination carrier: oil tanker adapted to carry either oil or solid bulk cargo.
+  - Clean ballast: ballast in tanks where oil content does not exceed 15 ppm.
+  - Special area: sea area requiring a higher degree of protection (Mediterranean, Baltic, Black Sea, Red Sea, Gulf of Aden, Antarctic, NW European Waters, Oman Sea Area, South African Waters).
+  - 15 ppm: the maximum allowable oil-in-water concentration for overboard discharge.
+
+Regulation 2 — Application
+Applies to all ships except warships, naval auxiliaries, and ships not on international voyages for which the Administration determines impracticable compliance (with measures to protect the marine environment "as far as is reasonable and practicable").
+
+Chapter 2 — Requirements for Control of Operational Pollution
+
+Regulation 9 — Control of Discharge of Oil (Non-Tankers)
+MARPOL Annex I Reg 9: Discharge of oil overboard from ships is prohibited except when:
+  (a) Ship is not in a special area;
+  (b) Ship is not less than 12 nautical miles from the nearest land;
+  (c) Ship is proceeding en route;
+  (d) Instantaneous rate of discharge of oil does not exceed 30 litres per nautical mile;
+  (e) Total quantity of oil discharged does not exceed 1/15,000 of total cargo for tankers or 1/30,000 of the total quantity of particular ballast (non-tankers);
+  (f) Ship has in operation an oil discharge monitoring and control system, oily-water separating equipment, and a slop tank arrangement.
+
+Regulation 12 — Tanks for Oil Residues (Sludge)
+MARPOL Annex I Reg 12: Every ship of 400 GT and above shall be fitted with a tank or tanks adequate for retaining oil residues (sludge) that cannot otherwise be dealt with.
+  - Minimum sludge tank capacity: V_s = K × P × D litres
+    K = 0.015 for diesel engines with oil purification systems; K = 0.005 for diesel engines without oil purification but using HFO; K = 0.005 for fuel consumption of distillate only.
+    P = total installed power in kW; D = design sea voyage duration in days.
+  - Practical minimum: for most cargo ships V_s = 15 L/day × installed power (in MW).
+  - Sludge tanks shall have no connections to bilge system other than emergency overboard discharge connection fitted with valve sealed by the Administration.
+  - Sludge to be retained onboard and discharged to port reception facilities or incinerated onboard.
+
+Regulation 14 — Oil Filtering Equipment (15 ppm Equipment)
+MARPOL Annex I Reg 14:
+  - Ships ≥ 400 GT: shall be fitted with oil filtering equipment capable of ensuring that any oily mixture discharged has oil content not exceeding 15 ppm.
+  - Ships ≥ 10,000 GT: shall be fitted with oil filtering equipment AND an oil discharge monitoring and control system that automatically stops discharge when oil content exceeds 15 ppm.
+  - The 15 ppm alarm/stopping device shall be wired directly to the bilge overboard discharge pump or valve to effect automatic stoppage. No manual override is permitted during routine operations.
+  - Type approval: OWS (oil-water separator) and oil content meter (OCM) to be type-approved per IMO Resolution MEPC.107(49) or MEPC.227(64) (as amended).
+  - Permitted installation: bilge, machinery space, and ballast water treatment are separate systems.
+  - Bypassing: prohibited. Any bypass valve must be sealed by the Administration.
+  - Malfunction: if OWS/OCM malfunctions, all bilge water to be retained onboard and discharged to port reception facility.
+
+Regulation 15 — Control of Discharge of Oil for Oil Tankers
+MARPOL Annex I Reg 15 (Tankers ≥ 150 GT): Discharge from cargo areas of oil tankers:
+  - Prohibited within 50 nm of nearest land; prohibited in special areas.
+  - Outside special areas: instantaneous discharge rate ≤ 30 L/nm; total discharged ≤ 1/30,000 of total cargo capacity; ODMCS (Oil Discharge Monitoring and Control System) in operation.
+  - Clean or segregated ballast may be discharged under the 15 ppm general regime.
+
+Regulation 17 — Oil Record Book Part I — Machinery Space Operations
+MARPOL Annex I Reg 17: All ships ≥ 400 GT shall maintain an Oil Record Book Part I (ORB-I).
+  - Entries required for each operation: ballasting or cleaning of oil fuel tanks; discharge of dirty ballast or cleaning water from oil fuel tanks; collection and disposal of oil residues (sludge); bilge water accumulated in machinery spaces; discharge overboard or disposal otherwise of bilge water.
+  - Required data for each ORB-I entry:
+    (a) Date, operational code letter;
+    (b) Name of the tank or position (latitude/longitude) if overboard discharge;
+    (c) Mass/volume of oil involved (cubic metres);
+    (d) Disposal method (port reception facility, retention onboard, incineration, other);
+    (e) Signature of officer in charge;
+    (f) Master's counter-signature.
+  - ORB-I to be retained onboard 3 years from last entry. Available to inspector at any time.
+  - Port State Control: PSC officers may inspect ORB-I. Discrepancies between oil content meter strip charts and ORB-I entries are evidence of non-compliance.
+
+Regulation 18 — Oil Record Book Part II — Cargo/Ballast Operations (Tankers)
+  - Tankers ≥ 150 GT to maintain ORB-II recording all cargo and ballast operations.
+  - Entries for: loading, internal transfer, unloading, ballasting of cargo tanks, crude oil washing (COW), cleaning cargo tanks, discharging water from slop tanks.
+
+Regulation 20 — Segregated Ballast Tanks (SBT)
+MARPOL Annex I Reg 20: New oil tankers ≥ 20,000 DWT (crude) and ≥ 30,000 DWT (product/chemical) shall be fitted with segregated ballast tanks.
+  - SBT total capacity: sufficient for the ship to operate safely in ballast without using cargo tanks for ballast. Metacentric height (GM) ≥ 0.15 m; freeboard: as per Load Lines.
+  - Piping and pumps for SBT shall have no connection to cargo oil pipeline system.
+
+Regulation 21 — Protective Location of SBT
+MARPOL Annex I Reg 21: On double-hull tankers ≥ 5,000 DWT, the double hull acts as SBT protection. Width of side tanks ≥ 2.0 m or 0.01B, whichever is greater; double bottom height ≥ 2.0 m or 0.015B.
+
+Chapter 3 — Requirements for Machinery Spaces
+
+Regulation 22 — Standard Discharge Connection
+Ships ≥ 400 GT: standard discharge connection (flanged coupling) at the discharge manifold for transferring oily mixtures to a reception facility. Standard coupling dimensions: outside diameter 215 mm; inner diameter compatible with pipe diameter; bolt circle 183 mm; 6 holes of 22 mm on 183 mm circle.
+
+=============================================================================
+ANNEX II — REGULATIONS FOR THE CONTROL OF POLLUTION BY NOXIOUS LIQUID SUBSTANCES
+=============================================================================
+
+Chapter 1 — General
+NLS tankers carry Category X, Y, and Z substances.
+  - Category X: substances that, if discharged into the sea, would present a major hazard. No discharge permitted at sea.
+  - Category Y: substances presenting a hazard. Discharge only outside special areas, 12 nm from land, ship proceeding, at ≤ 3% concentration.
+  - Category Z: substances presenting a minor hazard. Discharge permissible at similar conditions with 1.5% concentration limit.
+  - OS (Other Substances): evaluated not to fall in X, Y, Z — may be discharged in port or at sea per Annex II.
+
+=============================================================================
+ANNEX IV — REGULATIONS FOR THE PREVENTION OF POLLUTION BY SEWAGE FROM SHIPS
+=============================================================================
+
+Chapter 1 — General
+
+Regulation 2 — Definitions
+  - Sewage: drainage and wastes from WCs, urinals, hospital sinks; drainage from spaces containing live animals; other waste waters when mixed with drainages defined above.
+  - Holding tank: tank for collection and storage of sewage.
+  - Sewage treatment plant: any biological, chemical, or physical treatment system type-approved.
+  - Comminuting and disinfecting system: grinds and disinfects sewage to approved standard before discharge.
+
+Regulation 9 — Standard Discharge Connections
+Ships required to carry sewage: standard discharge coupling identical to Annex I Reg 22 dimensions.
+
+Regulation 11 — Control of Discharge of Sewage
+MARPOL Annex IV Reg 11: Discharge of sewage is prohibited unless:
+  (a) The ship is discharging comminuted and disinfected sewage at > 3 nm from nearest land; OR
+  (b) The ship is discharging sewage that is not comminuted and disinfected at > 12 nm from nearest land and rate not excessive; OR
+  (c) The ship has an operational sewage treatment plant certified to the 2006 MARPOL/IMO standard for effluent quality.
+  Ships in special areas (Baltic, Antarctic): no discharge permitted. Must use holding tank or sewage treatment plant with effluent meeting Annex IV amended standards.
+
+Regulation 11A — Discharge within Special Areas
+MARPOL Annex IV Reg 11A: Applies to ships ≥ 500 GT or certified for ≥ 15 persons.
+  Within Baltic Sea Area: no discharge of sewage unless ship has type-approved sewage treatment plant complying with advanced treatment standard (nitrogen and phosphorus reduction in addition to BOD5 and suspended solids).
+
+Regulation 12 — Sewage Treatment Plants
+  - Ships ≥ 400 GT engaged in international voyages: shall be equipped with either:
+    (a) Approved sewage treatment plant (type-approved per resolution MEPC.227(64)); or
+    (b) Approved sewage comminuting and disinfecting system with holding tank; or
+    (c) Holding tank of sufficient capacity for all sewage on international voyage.
+  - Sewage treatment plant effluent limits (MEPC.227(64)):
+    BOD5 ≤ 25 mg/L; TSS ≤ 35 mg/L; pH 6–8.5; coliform count ≤ 100/100 mL.
+  - Advanced treatment effluent limits (for special areas — MEPC.274(69)):
+    Total nitrogen ≤ 20 mg/L; total phosphorus ≤ 1 mg/L; BOD5 ≤ 25 mg/L; TSS ≤ 35 mg/L.
+
+=============================================================================
+ANNEX V — PREVENTION OF POLLUTION BY GARBAGE FROM SHIPS
+=============================================================================
+
+Regulation 3 — General Prohibition on Discharge of Garbage
+MARPOL Annex V Reg 3: Discharge of all garbage into the sea is prohibited, except as provided in Regulations 4, 5, and 6.
+
+Regulation 4 — Discharge of Garbage Outside Special Areas
+  - Food wastes: permissible > 12 nm from land.
+  - Comminuted/ground food wastes (≤ 25 mm): permissible > 3 nm from land.
+  - All other garbage (plastics, synthetic ropes, fishing gear, paper, rags, glass, metal, bottles, crockery, incinerator ash, etc.): prohibited.
+
+Regulation 5 — Special Requirements within Special Areas
+  - Only food wastes permitted > 12 nm from land in special areas.
+  - Antarctic: no discharge of any garbage including food wastes.
+
+Regulation 6 — Discharge of Garbage within Special Areas
+  Baltic, Black Sea, Mediterranean: no discharge of any garbage including food wastes.
+  Exception: food wastes only if treated to ≤ 25 mm particle size and ship is > 12 nm from land.
+
+Regulation 10 — Garbage Record Book
+MARPOL Annex V Reg 10: All ships ≥ 400 GT and every ship certified to carry 15 or more persons shall maintain a Garbage Record Book.
+  - Record all discharges or incineration of garbage: date, time, position, estimated volume, category.
+  - Retained onboard 2 years.
+
+Regulation 10A — Garbage Management Plan
+Ships ≥ 100 GT: garbage management plan required per Reg 10A specifying procedures for collecting, storing, processing, and disposing of garbage onboard. Named officer responsible for implementation.
+
+=============================================================================
+ANNEX VI — PREVENTION OF AIR POLLUTION FROM SHIPS
+=============================================================================
+
+Chapter 2 — Control of Emissions
+
+Regulation 13 — Nitrogen Oxides (NOx)
+MARPOL Annex VI Reg 13: NOx emission limits for marine diesel engines with rated power > 130 kW:
+  Tier I (built before 1/1/2011): n ≤ 130 rpm: 17.0 g/kWh; 130 < n < 2000 rpm: 45.0 × n^(-0.2) g/kWh; n ≥ 2000 rpm: 9.8 g/kWh.
+  Tier II (built 1/1/2011–31/12/2015): n ≤ 130: 14.4 g/kWh; 130 < n < 2000: 44.0 × n^(-0.23) g/kWh; n ≥ 2000: 7.7 g/kWh.
+  Tier III (for NOx ECAs, built from 1/1/2016): n ≤ 130: 3.4 g/kWh; 130 < n < 2000: 9.0 × n^(-0.2) g/kWh; n ≥ 2000: 2.0 g/kWh.
+  Tier III required in NOx Tier III Emission Control Areas (North American ECA from 2016, Baltic Sea from 2021).
+
+Regulation 14 — Sulphur Oxides (SOx) and Particulate Matter
+MARPOL Annex VI Reg 14: Maximum sulphur content of fuel oil:
+  Global cap since 1 January 2020: S ≤ 0.50% m/m.
+  Within SOx ECAs (Baltic, North Sea, North American, US Caribbean): S ≤ 0.10% m/m.
+  Compliance methods: (a) use compliant low-sulphur fuel; (b) fit approved exhaust gas cleaning system (EGCS/scrubber) with residual equivalent to ≤ 0.10% SOx ECA limit.
+  Bunker delivery note (BDN): required for all bunker fuel. Retained onboard 3 years.
+  Fuel oil non-availability: FONAR procedure if compliant fuel not available. Recorded in logbook.
+
+Regulation 15 — Volatile Organic Compounds (VOC)
+MARPOL Annex VI Reg 15: Crude oil tankers loading in designated ports: VOC management plan required. Vapour emission control systems (VECS) if required by port state authority.
+
+Regulation 16 — Shipboard Incineration
+MARPOL Annex VI Reg 16: Incineration of garbage permitted only in type-approved incinerators. Prohibited: cargo residues of substances listed in Annex I, II, III; related contaminated packing materials; polychlorinated biphenyls (PCBs); garbage containing heavy metal; refined petroleum products containing halogen compounds.
+  Incineration prohibited in port, harbour, estuary. Prohibited in Antarctic.
+
+Regulation 20 — Fuel Oil Quality
+MARPOL Annex VI Reg 20: All fuel oil used onboard shall have a flash point ≥ 60°C (except gas fuels). All fuel oil to comply with ISO 8217 current edition for marine fuels.
+
+Energy Efficiency Design Index (EEDI) and Ship Energy Efficiency Management Plan (SEEMP)
+MARPOL Annex VI Chapter 4 — Energy Efficiency:
+  Regulation 22: EEDI applies to new ships ≥ 400 GT (cargo ships, tankers, bulk carriers, container ships). Required EEDI = Reference EEDI × (1 - X%) where X% is reduction factor (Phase 1: 10%; Phase 2: 20%; Phase 3: 30%).
+  Regulation 22A: EEXI (Energy Efficiency Existing Ship Index) for ships ≥ 400 GT built before 2013. EEXI calculation and certification by 2023.
+  Regulation 26: SEEMP (Ship Energy Efficiency Management Plan) required for all ships ≥ 400 GT. Annual Carbon Intensity Indicator (CII) rating (A to E) from 2023.
+  CII formula: CII (g CO2/DWT·nm) = Total CO2 emitted / (Deadweight × Distance sailed). Target: improvement 2% per year 2023–2026.
