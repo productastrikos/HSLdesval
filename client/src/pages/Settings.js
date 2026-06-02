@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  getApiKey, setApiKey, clearApiKey, isConfigured,
   testConnection, getKbStatus,
 } from '../services/aiService';
 
@@ -11,9 +10,6 @@ function StatusDot({ ok }) {
 }
 
 export default function Settings() {
-  const [keyInput,    setKeyInput]    = useState(() => getApiKey());
-  const [masked,      setMasked]      = useState(true);
-  const [saved,       setSaved]       = useState(false);
   const [testing,     setTesting]     = useState(false);
   const [testResult,  setTestResult]  = useState(null);
   const [kbStatus,    setKbStatus]    = useState(null);
@@ -32,18 +28,6 @@ export default function Settings() {
 
   useEffect(() => { refreshKb(); }, [refreshKb]);
 
-  const save = () => {
-    setApiKey(keyInput);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  };
-
-  const clear = () => {
-    clearApiKey();
-    setKeyInput('');
-    setTestResult(null);
-  };
-
   const runTest = async () => {
     setTesting(true);
     setTestResult(null);
@@ -57,75 +41,22 @@ export default function Settings() {
     setTesting(false);
   };
 
-  const configured = isConfigured();
-
   return (
     <div className="h-full overflow-y-auto p-1 space-y-5 max-w-3xl mx-auto">
       <div>
         <h1 className="text-xl font-bold text-white tracking-tight">Settings</h1>
         <p className="text-[11px] text-slate-400 mt-0.5">
-          Configure the AI backend connection and manage the knowledge base.
+          Manage the knowledge base and verify the AI backend connection.
         </p>
       </div>
 
-      {/* ── API Key ───────────────────────────────────────────────────────── */}
+      {/* ── Backend Connection ────────────────────────────────────────────── */}
       <div className="bg-app-panel border border-app-border rounded-xl p-5 space-y-4">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-bold text-white">Anthropic API Key</h2>
-          <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${
-            configured
-              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-              : 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-          }`}>
-            {configured ? 'Configured' : 'Not Set'}
-          </span>
-        </div>
-
+        <h2 className="text-sm font-bold text-white">Backend Connection</h2>
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          The API key is stored locally in your browser and forwarded to the
-          backend server per request. It is never transmitted externally — all
-          calls go to the local backend (localhost:5001) which then calls Anthropic.
+          The Gemini API key is configured in <code className="font-mono bg-slate-800 text-slate-200 px-1 rounded">server/.env</code> — no browser configuration required.
+          All AI calls are made server-side; the key is never exposed to the client.
         </p>
-
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <input
-              type={masked ? 'password' : 'text'}
-              value={keyInput}
-              onChange={e => setKeyInput(e.target.value)}
-              placeholder="sk-ant-api03-…"
-              className="w-full text-[12px] px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 font-mono pr-10 focus:outline-none focus:border-sky-500/60"
-            />
-            <button
-              onClick={() => setMasked(m => !m)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-              title={masked ? 'Show key' : 'Hide key'}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {masked
-                  ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm-10.94-.494C5.905 8.102 8.763 6 12 6c3.238 0 6.095 2.102 7.94 5.506M4.06 11.506C5.905 15.9 8.763 18 12 18c3.238 0 6.095-2.1 7.94-6.494" />
-                  : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                }
-              </svg>
-            </button>
-          </div>
-          <button
-            onClick={save}
-            disabled={!keyInput.trim()}
-            className="px-4 py-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 text-white text-xs font-bold disabled:opacity-40 hover:opacity-90 transition-opacity"
-          >
-            {saved ? '✓ Saved' : 'Save Key'}
-          </button>
-          {configured && (
-            <button
-              onClick={clear}
-              className="px-3 py-2 rounded-lg text-red-400 border border-red-500/30 text-xs font-semibold hover:bg-red-500/10 transition-colors"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
         <div className="flex items-center gap-3">
           <button
             onClick={runTest}
@@ -233,11 +164,11 @@ export default function Settings() {
           </div>
           <div className="flex items-start gap-2">
             <span className="text-sky-400 font-mono font-bold mt-0.5">2.</span>
-            <span>Paste your Anthropic API key above and click <span className="text-white font-semibold">Save Key</span>.</span>
+            <span>Add your Gemini API key to <code className="font-mono bg-slate-800 text-slate-200 px-1 rounded">server/.env</code> as <code className="font-mono bg-slate-800 text-slate-200 px-1 rounded">GEMINI_API_KEY=...</code>.</span>
           </div>
           <div className="flex items-start gap-2">
             <span className="text-sky-400 font-mono font-bold mt-0.5">3.</span>
-            <span>Click <span className="text-white font-semibold">Test Connection</span> to confirm the backend is running and the KB is loaded.</span>
+            <span>Click <span className="text-white font-semibold">Test Connection</span> above to confirm the backend is running and the KB is loaded.</span>
           </div>
           <div className="flex items-start gap-2">
             <span className="text-sky-400 font-mono font-bold mt-0.5">4.</span>
@@ -254,7 +185,7 @@ export default function Settings() {
       <div className="bg-app-panel border border-app-border rounded-xl p-4 text-[11px] text-slate-400 flex items-center justify-between">
         <div>
           <span className="text-white font-semibold">Model:</span>{' '}
-          claude-sonnet-4-6 (latest) · RAG: TF-IDF in-memory · Chunks: 200 words / 40 overlap
+          gemini-2.0-flash · RAG: TF-IDF in-memory · Chunks: 200 words / 40 overlap
         </div>
         <span className="text-[9px] uppercase tracking-widest text-slate-600 font-bold">HSL Design Validator</span>
       </div>

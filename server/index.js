@@ -2,10 +2,26 @@
 // HSL Design Validator — Express API Server
 // ─────────────────────────────────────────────────────────────────────────────
 
+require('dotenv').config();
+
 const express = require('express');
 const cors    = require('cors');
 const multer  = require('multer');
 const rag     = require('./rag');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+if (!process.env.GEMINI_API_KEY) {
+  console.error('[FATAL] GEMINI_API_KEY is not set. Add it to server/.env');
+  process.exit(1);
+}
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+function getGeminiModel(systemInstruction) {
+  const opts = { model: 'gemini-2.0-flash' };
+  if (systemInstruction) opts.systemInstruction = systemInstruction;
+  return genAI.getGenerativeModel(opts);
+}
 
 const app    = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -17,13 +33,7 @@ app.use(express.json({ limit: '10mb' }));
 rag.initializeKnowledgeBase()
   .catch(err => console.error('[RAG] KB init error:', err.message));
 
-// ── Anthropic client factory ──────────────────────────────────────────────────
-function getClient(req) {
-  const apiKey = req.headers['x-api-key'];
-  if (!apiKey) throw new Error('No API key provided. Configure your Anthropic API key in Settings.');
-  const Anthropic = require('@anthropic-ai/sdk');
-  return new Anthropic({ apiKey });
-}
+
 
 // ── System prompt builder ─────────────────────────────────────────────────────
 function buildSystemPrompt(context, domain, mode) {
@@ -73,7 +83,6 @@ function dedupeContext(chunks) {
 // ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/chat', async (req, res) => {
   try {
-    const client = getClient(req);
     const { messages = [], domain } = req.body;
 
     // Build retrieval query from up to last 3 user turns for broader context
@@ -89,22 +98,24 @@ app.post('/api/chat', async (req, res) => {
 
     const context = dedupeContext([...ctxMain, ...ctxBroad]).slice(0, 7);
 
-    const apiMessages = messages
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => ({ role: m.role, content: m.content }));
+    const allMessages = messages.filter(m => m.role === 'user' || m.role === 'assistant');
+    if (!allMessages.length) return res.status(400).json({ error: 'No messages provided' });
 
-    if (!apiMessages.length) return res.status(400).json({ error: 'No messages provided' });
+    const model = getGeminiModel(buildSystemPrompt(context, domain, 'chat'));
 
-    const response = await client.messages.create({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 2048,
-      system:     buildSystemPrompt(context, domain, 'chat'),
-      messages:   apiMessages,
-    });
+    // Convert prior turns into Gemini history (all but the last user message)
+    const history = allMessages.slice(0, -1).map(m => ({
+      role:  m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+    const lastUserMessage = allMessages.at(-1).content;
 
-    const content      = response.content[0].text;
-    const citations    = [...new Set(context.map(c => c.source))].slice(0, 5);
-    const ctxDetails   = context.map(c => ({ source: c.source, section: c.section || '', score: c.score || 0 }));
+    const chat   = model.startChat({ history });
+    const result = await chat.sendMessage(lastUserMessage);
+    const content = result.response.text();
+
+    const citations  = [...new Set(context.map(c => c.source))].slice(0, 5);
+    const ctxDetails = context.map(c => ({ source: c.source, section: c.section || '', score: c.score || 0 }));
 
     res.json({ content, citations, contextUsed: context.length, contextDetails: ctxDetails });
   } catch (err) {
@@ -118,7 +129,6 @@ app.post('/api/chat', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/validate', async (req, res) => {
   try {
-    const client = getClient(req);
     const { specId, domain, additionalContext } = req.body;
 
     // Try to use actual spec text for more targeted retrieval
@@ -157,13 +167,10 @@ Each finding must have exactly these fields:
 
 Return 4–8 findings covering different rule areas. Reference specific clause numbers where possible.`;
 
-    const response = await client.messages.create({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 3000,
-      messages:   [{ role: 'user', content: prompt }],
-    });
+    const model  = getGeminiModel();
+    const result = await model.generateContent(prompt);
+    const text   = result.response.text();
 
-    const text = response.content[0].text;
     let findings = [];
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
@@ -182,7 +189,6 @@ Return 4–8 findings covering different rule areas. Reference specific clause n
 // ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/generate-spec', async (req, res) => {
   try {
-    const client = getClient(req);
     const { domain, vessel, lbp, classSociety, includeNaval } = req.body;
 
     // Retrieve domain rules + IMO/SOLAS/MARPOL context if relevant
@@ -229,13 +235,9 @@ Include these sections (8–10 total):
 ${includeNaval ? '9. Naval / NSQR Requirements\n' : ''}
 Each section must be detailed (4–8 sentences), reference specific clause numbers, and be appropriate for the ${domain} domain on a ${lbp} m vessel classed by ${classSociety}.`;
 
-    const response = await client.messages.create({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 4096,
-      messages:   [{ role: 'user', content: prompt }],
-    });
-
-    const text = response.content[0].text;
+    const model  = getGeminiModel();
+    const result = await model.generateContent(prompt);
+    const text   = result.response.text();
     let sections  = [];
     let citations = [];
 
@@ -283,7 +285,6 @@ Each section must be detailed (4–8 sentences), reference specific clause numbe
 // ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/compare', async (req, res) => {
   try {
-    const client = getClient(req);
     let { docAId, docBId, docAText, docBText, docAName, docBName } = req.body;
 
     if (docAId && !docAText) {
@@ -324,13 +325,10 @@ Each difference must have:
 
 Return 5–12 differences covering structural, numerical, and textual changes.`;
 
-    const response = await client.messages.create({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 3000,
-      messages:   [{ role: 'user', content: prompt }],
-    });
+    const model  = getGeminiModel();
+    const result = await model.generateContent(prompt);
+    const text   = result.response.text();
 
-    const text = response.content[0].text;
     let diff = [];
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {

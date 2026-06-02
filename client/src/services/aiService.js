@@ -1,25 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // HSL Design Validator — AI Service
 // Calls the local Express backend (proxied via React dev server).
-// API key stored in localStorage, forwarded as X-Api-Key header.
+// The Gemini API key is configured server-side via server/.env
 // ─────────────────────────────────────────────────────────────────────────────
 
 const API_BASE = '/api';
 
-// ── Key management ────────────────────────────────────────────────────────────
-export function getApiKey()        { return localStorage.getItem('hsl_api_key') || ''; }
-export function setApiKey(key)     { localStorage.setItem('hsl_api_key', key.trim()); }
-export function clearApiKey()      { localStorage.removeItem('hsl_api_key'); }
-export function isConfigured()     { return !!getApiKey(); }
+// Always true — API key is configured server-side via server/.env
+export function isConfigured() { return true; }
 
 // ── Internal fetch helper ─────────────────────────────────────────────────────
 async function apiFetch(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: {
-      'x-api-key': getApiKey(),
-      ...(options.headers || {}),
-    },
+    headers: { ...(options.headers || {}) },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
