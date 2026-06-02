@@ -413,7 +413,7 @@ All endpoints require the `x-api-key: <anthropic-key>` header for AI-powered rou
 - npm 9 or later
 - An Anthropic API key (for AI features — the app runs in demo mode without one)
 
-### Installation
+### Local development
 
 ```bash
 # Clone the repository
@@ -422,11 +422,7 @@ cd HSLdesval
 
 # Install all dependencies (root + server + client)
 npm run install:all
-```
 
-### Running in development
-
-```bash
 # Start both the backend (port 5001) and the frontend (port 3000) concurrently
 npm run dev
 ```
@@ -435,22 +431,105 @@ Or start them separately:
 
 ```bash
 # Terminal 1 — Backend API server
-npm run server          # runs node server/index.js on :5001
+npm run server          # node server/index.js on :5001
 
 # Terminal 2 — React development server
-npm run client          # runs cd client && npm start on :3000
+npm run client          # cd client && npm start on :3000
 ```
 
-### Access
-
-- **Frontend**: http://localhost:3000
+- **Frontend (dev)**: http://localhost:3000
 - **Backend API**: http://localhost:5001/api
 - **Health check**: http://localhost:5001/api/health
+
+---
+
+## 12a. Hostinger Node.js Deployment
+
+This project is configured for a single-process deployment: the Express server serves both the API and the compiled React app as static files.
+
+### How it works in production
+
+```
+Browser → Hostinger server (your-domain.com)
+  GET /          → Express serves client/build/index.html
+  GET /chatbot   → Express serves client/build/index.html  (SPA routing)
+  POST /api/chat → Express handles API + calls Anthropic
+```
+
+All API calls from the React app use relative `/api/*` paths, so there is no hard-coded URL to change.
+
+### Step-by-step Hostinger setup
+
+**1. Push code to GitHub**
+```bash
+git add .
+git commit -m "deployment ready"
+git push origin master
+```
+
+**2. In Hostinger hPanel → Node.js**
+
+| Setting | Value |
+|---|---|
+| Node.js version | 18 (or latest LTS) |
+| Application root | `/` (repo root) |
+| Application startup file | `server/index.js` |
+| Application URL | your domain |
+
+**3. Deploy the code**
+
+Connect your GitHub repository in hPanel → Git. Hostinger will pull the latest commit.
+
+**4. Install dependencies**
+
+In the Hostinger file manager terminal (or SSH), run:
+
+```bash
+npm run build
+```
+
+This single command:
+- Installs `server/node_modules`
+- Installs `client/node_modules`
+- Compiles the React app into `client/build/`
+
+> If you hit a memory error during the React build, run:
+> `node --max-old-space-size=512 node_modules/.bin/react-scripts build`
+> inside the `client/` directory.
+
+**5. Set environment variables**
+
+In hPanel → Node.js → Environment Variables (or via `.env`):
+
+| Variable | Value | Required |
+|---|---|---|
+| `PORT` | Set automatically by Hostinger | Auto |
+| `NODE_ENV` | `production` | Recommended |
+
+The Anthropic API key is **not** an environment variable — users enter it in the Settings page and it is stored in their browser's `localStorage`. Nothing is stored on the server.
+
+**6. Start the application**
+
+In hPanel, click **Start** (or **Restart**). Hostinger calls `npm start`, which runs `node server/index.js`.
+
+**7. First-boot note — semantic embedding model**
+
+On the very first start, the RAG engine downloads the `all-MiniLM-L6-v2` ONNX model (~22 MB) from Hugging Face. This is a one-time download; subsequent starts use the disk cache at `server/rag/embcache/store.json`. If the download fails (e.g., no outbound internet), the system falls back to BM25 keyword search automatically — the app remains fully functional.
+
+**8. Verify deployment**
+
+Open `https://your-domain.com/api/health` — you should see:
+```json
+{ "status": "ok", "documents": 8, "chunks": 350, ... }
+```
+
+Then open `https://your-domain.com` to use the app.
 
 ### Production build
 
 ```bash
-npm run build           # installs client deps and produces client/build/
+npm run build           # installs all deps + compiles React app into client/build/
+npm start               # starts the production server
 ```
 
 ---

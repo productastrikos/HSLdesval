@@ -7,6 +7,8 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const multer  = require('multer');
+const path    = require('path');
+const fs      = require('fs');
 const rag     = require('./rag');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
@@ -430,6 +432,17 @@ app.get('/api/documents', (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), ...rag.getStatus() });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Serve React build in production
+// ─────────────────────────────────────────────────────────────────────────────
+const buildDir = path.join(__dirname, '../client/build');
+if (fs.existsSync(buildDir)) {
+  app.use(express.static(buildDir));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(buildDir, 'index.html'));
+  });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5001;
