@@ -1,0 +1,18 @@
+[
+  {
+    "id": "user-admin-1",
+    "username": "admin",
+    "passwordHash": "$2b$10$/J4hSgWOSGJlEAW4EflCZ.ZLbQmS9JC3.4gKR3c6UVrhFAVtf20aO",
+    "fullName": "System Administrator",
+    "role": "admin",
+    "createdAt": "2026-06-03T08:00:17.133Z"
+  },
+  {
+    "id": "user-eng-1",
+    "username": "engineer1",
+    "passwordHash": "$2b$10$pSRoUd73KS6Eu4Eru27VqOUVn8I0qHN4OR.zUdOBZE9beUIg.LKIG",
+    "fullName": "Design Engineer",
+    "role": "user",
+    "createdAt": "2026-06-03T08:00:17.209Z"
+  }
+]

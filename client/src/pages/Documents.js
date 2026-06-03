@@ -2,17 +2,27 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { INDEXED_DOCS, compareDocs } from '../services/hslKnowledge';
 import { uploadDocument, compareByIds, listDocuments, isConfigured } from '../services/aiService';
+import { useAuth } from '../context/AuthContext';
 
 const TYPE_COLOR = {
-  'Class Rule': 'bg-sky-500/15 text-sky-300 border-sky-500/30',
-  'IACS':       'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
-  'IMO':        'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  'IEC':        'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  'Naval':      'bg-red-500/15 text-red-300 border-red-500/30',
-  'Build Spec': 'bg-violet-500/15 text-violet-300 border-violet-500/30',
-  'OEM Manual': 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
-  'Upload':     'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  'Class Rule':      'bg-sky-500/15 text-sky-300 border-sky-500/30',
+  'IACS':            'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
+  'IMO':             'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  'IEC':             'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  'Naval':           'bg-red-500/15 text-red-300 border-red-500/30',
+  'Build Spec':      'bg-violet-500/15 text-violet-300 border-violet-500/30',
+  'OEM Manual':      'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+  'Design Document': 'bg-teal-500/15 text-teal-300 border-teal-500/30',
+  'Tender Document': 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+  'Vendor Spec':     'bg-lime-500/15 text-lime-300 border-lime-500/30',
+  'Upload':          'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
 };
+
+// Types available per role
+const ADMIN_DOC_TYPES = ['Class Rule', 'IACS', 'IMO', 'IEC', 'Naval', 'Build Spec', 'OEM Manual', 'Design Document', 'Tender Document', 'Vendor Spec'];
+const USER_DOC_TYPES  = ['OEM Manual', 'Design Document', 'Tender Document', 'Vendor Spec'];
+
+const COMPLIANCE_TYPES = new Set(['Class Rule', 'IACS', 'IMO', 'IEC', 'Naval', 'Build Spec']);
 
 function ProgressBar({ value, color = 'bg-sky-400' }) {
   return (
@@ -23,22 +33,21 @@ function ProgressBar({ value, color = 'bg-sky-400' }) {
 }
 
 // ── Document upload card ──────────────────────────────────────────────────────
-function UploadCard({ onAdd, aiMode }) {
+function UploadCard({ onAdd, aiMode, userRole }) {
+  const TYPES = userRole === 'admin' ? ADMIN_DOC_TYPES : USER_DOC_TYPES;
+
   const [stage,    setStage]    = useState('idle');
   const [progress, setProgress] = useState(0);
   const [fileInfo, setFileInfo] = useState(null);
   const [error,    setError]    = useState(null);
-  const [docType,  setDocType]  = useState('Build Spec');
+  const [docType,  setDocType]  = useState(TYPES[0]);
   const fileRef = useRef(null);
-
-  const TYPES = ['Class Rule', 'IACS', 'IMO', 'IEC', 'Naval', 'Build Spec', 'OEM Manual', 'Upload'];
 
   const start = async (file) => {
     setFileInfo({ name: file.name, size: file.size });
     setError(null);
 
     if (aiMode) {
-      // ── Real upload path ────────────────────────────────────────────────
       setStage('reading'); setProgress(20);
       try {
         setStage('ocr'); setProgress(50);
@@ -61,7 +70,6 @@ function UploadCard({ onAdd, aiMode }) {
         setStage('idle');
       }
     } else {
-      // ── Demo upload simulation ──────────────────────────────────────────
       const tick = (next, msFor, after) => {
         const t0 = Date.now();
         const itv = setInterval(() => {
@@ -95,7 +103,9 @@ function UploadCard({ onAdd, aiMode }) {
   const onPick = (e) => { const f = e.target.files?.[0]; if (f) start(f); };
 
   const stageLabel = {
-    idle:     'Drag a PDF, DOCX, or image here — or click to upload',
+    idle:     userRole === 'admin'
+      ? 'Drag a PDF, DOCX, or image here — or click to upload'
+      : 'Upload vendor / design documents (PDF, DOCX)',
     reading:  aiMode ? 'Reading file…' : 'Reading binary stream…',
     ocr:      aiMode ? 'Extracting text (PDF parse / OCR)…' : 'Running offline OCR…',
     indexing: aiMode ? 'Chunking and indexing into knowledge base…' : 'Generating embeddings and cross-references…',
@@ -114,15 +124,27 @@ function UploadCard({ onAdd, aiMode }) {
             <span className="text-sm font-semibold">{stageLabel}</span>
             <span className="text-[11px] text-slate-500">PDF · DOCX · scanned images · CSV · up to 200 MB</span>
           </button>
-          <div className="flex items-center gap-2">
-            <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold shrink-0">Document Type:</label>
-            <select
-              value={docType}
-              onChange={e => setDocType(e.target.value)}
-              className="text-[11px] px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 flex-1"
-            >
-              {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold shrink-0">Document Type:</label>
+              <select
+                value={docType}
+                onChange={e => setDocType(e.target.value)}
+                className="text-[11px] px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 flex-1"
+              >
+                {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            {/* Category hint */}
+            <div className={`text-[10px] px-2 py-1 rounded font-semibold border ${
+              COMPLIANCE_TYPES.has(docType)
+                ? 'bg-violet-500/10 text-violet-300 border-violet-500/25'
+                : 'bg-teal-500/10 text-teal-300 border-teal-500/25'
+            }`}>
+              {COMPLIANCE_TYPES.has(docType)
+                ? 'Compliance / Guardrail document — will be added to the regulatory knowledge base'
+                : 'Vendor / Design document — will be indexed for validation and comparison'}
+            </div>
           </div>
         </div>
       )}
@@ -325,8 +347,11 @@ function ComparePanel({ allDocs, aiMode, navigate }) {
 
 // ── Main Documents page ───────────────────────────────────────────────────────
 export default function Documents() {
-  const navigate = useNavigate();
-  const aiMode   = isConfigured();
+  const navigate        = useNavigate();
+  const { user }        = useAuth();
+  const userRole        = user?.role || 'user';
+  const isAdmin         = userRole === 'admin';
+  const aiMode          = isConfigured();
 
   const [docs,         setDocs]         = useState(INDEXED_DOCS);
   const [backendDocs,  setBackendDocs]  = useState([]);
@@ -344,24 +369,26 @@ export default function Documents() {
 
   useEffect(() => { refreshBackendDocs(); }, [refreshBackendDocs]);
 
-  const types = ['All', ...Array.from(new Set(docs.map(d => d.type)))];
+  // In AI mode, display backend docs in the table; otherwise use static INDEXED_DOCS
+  const displayDocs = aiMode ? backendDocs : docs;
+
+  const types = ['All', ...Array.from(new Set(displayDocs.map(d => d.type)))];
 
   const filtered = useMemo(() => {
-    return docs.filter(d => {
+    return displayDocs.filter(d => {
       if (filter !== 'All' && d.type !== filter) return false;
       if (query && !d.name.toLowerCase().includes(query.toLowerCase())) return false;
       return true;
     });
-  }, [docs, filter, query]);
+  }, [displayDocs, filter, query]);
 
   const summary = useMemo(() => ({
-    total:    docs.length,
-    pages:    docs.reduce((s, d) => s + (d.pages || 0), 0),
-    ocrPages: docs.filter(d => d.ocr).reduce((s, d) => s + (d.pages || 0), 0),
-    avgConf:  docs.length > 0 ? (docs.reduce((s, d) => s + (d.confidence || 99), 0) / docs.length).toFixed(1) : '99.0',
-  }), [docs]);
+    total:      displayDocs.length,
+    pages:      displayDocs.reduce((s, d) => s + (d.pages || d.chunkCount || 0), 0),
+    compliance: displayDocs.filter(d => d.docCategory === 'compliance' || COMPLIANCE_TYPES.has(d.type)).length,
+    vendor:     displayDocs.filter(d => d.docCategory === 'vendor' || (!COMPLIANCE_TYPES.has(d.type) && d.docCategory !== 'system')).length,
+  }), [displayDocs]);
 
-  // Merge frontend docs + backend docs for comparison panel
   const allDocsForCompare = useMemo(() => {
     return backendDocs.map(d => ({ id: d.id, name: d.name }));
   }, [backendDocs]);
@@ -371,28 +398,46 @@ export default function Documents() {
       <div>
         <h1 className="text-xl font-bold text-white tracking-tight">Document Intelligence</h1>
         <p className="text-[11px] text-slate-400 mt-0.5">
-          {aiMode
-            ? 'Upload documents to the knowledge base · AI-powered extraction · comparison · format conversion'
-            : 'OCR · text extraction · cross-reference · format conversion · comparison (demo mode)'
+          {isAdmin
+            ? 'Upload compliance & vendor documents · AI-powered extraction · comparison · format conversion'
+            : 'Upload vendor design documents · validate against compliance rules · compare with AI'
           }
         </p>
       </div>
 
-      {!aiMode && (
-        <div className="flex items-center gap-2 bg-amber-500/[0.08] border border-amber-500/30 rounded-lg px-3 py-2 text-[11px] text-amber-300">
-          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-          Demo mode — file uploads and comparison are simulated.
-          <button onClick={() => navigate('/settings')} className="font-bold underline hover:text-white">Configure API key →</button>
+      {/* Role badge */}
+      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-semibold ${
+        isAdmin
+          ? 'bg-violet-500/10 border-violet-500/30 text-violet-300'
+          : 'bg-sky-500/10 border-sky-500/30 text-sky-300'
+      }`}>
+        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d={isAdmin
+              ? 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'
+              : 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
+            } />
+        </svg>
+        {isAdmin ? 'Administrator — full document access' : 'Design Engineer — vendor documents only'}
+      </div>
+
+      {!isAdmin && (
+        <div className="flex items-start gap-2 bg-amber-500/[0.06] border border-amber-500/25 rounded-lg px-3 py-2 text-[11px] text-amber-300">
+          <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          <span>
+            You can upload <strong>vendor and design documents</strong> (OEM Manual, Design Document, Tender Document, Vendor Spec).
+            Compliance and guardrail documents (Class Rules, IACS, IMO, etc.) can only be uploaded by administrators.
+          </span>
         </div>
       )}
 
       {/* Summary tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label:'Indexed',      value:summary.total,                  color:'text-sky-400',    sub:'documents' },
-          { label:'Total Pages',  value:summary.pages.toLocaleString(), color:'text-emerald-400', sub:'fully searchable' },
-          { label:'OCR Pages',    value:summary.ocrPages.toLocaleString(), color:'text-violet-400', sub:'scanned / image' },
-          { label:'OCR Confidence', value:`${summary.avgConf}%`,        color:'text-amber-400',  sub:'average' },
+          { label:'Indexed',            value:summary.total,                  color:'text-sky-400',    sub:'documents' },
+          { label:'Compliance Docs',    value:summary.compliance,             color:'text-violet-400', sub:'guardrails & rules' },
+          { label:'Vendor / Design',    value:summary.vendor,                 color:'text-teal-400',   sub:'tender & OEM' },
+          { label:'Total Pages/Chunks', value:summary.pages.toLocaleString(), color:'text-amber-400',  sub:'indexed content' },
         ].map(({ label, value, color, sub }) => (
           <div key={label} className="bg-app-panel border border-app-border rounded-xl p-4">
             <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">{label}</div>
@@ -406,6 +451,7 @@ export default function Documents() {
         <div className="lg:col-span-2 space-y-3">
           <UploadCard
             aiMode={aiMode}
+            userRole={userRole}
             onAdd={(d) => {
               setDocs(prev => [d, ...prev]);
               refreshBackendDocs();
@@ -442,6 +488,7 @@ export default function Documents() {
                     <th className="text-left px-3 py-2 font-bold">Document</th>
                     <th className="text-left px-3 py-2 font-bold">Type</th>
                     <th className="text-right px-3 py-2 font-bold">Pages</th>
+                    {isAdmin && <th className="text-left px-3 py-2 font-bold">Uploaded By</th>}
                     <th className="text-center px-3 py-2 font-bold">OCR</th>
                     <th className="text-right px-3 py-2 font-bold">Confidence</th>
                   </tr>
@@ -456,17 +503,50 @@ export default function Documents() {
                       <td className="px-3 py-2">
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest ${TYPE_COLOR[d.type] || 'bg-slate-700 text-slate-300 border-slate-600'}`}>{d.type}</span>
                       </td>
-                      <td className="text-right px-3 py-2 text-slate-300 font-mono">{d.pages}</td>
+                      <td className="text-right px-3 py-2 text-slate-300 font-mono">
+                        {d.pages || d.chunkCount || '—'}
+                      </td>
+                      {isAdmin && (
+                        <td className="px-3 py-2">
+                          {d.uploadedBy ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[9px] px-1 py-0.5 rounded font-semibold border ${
+                                d.uploadedByRole === 'admin'
+                                  ? 'bg-violet-500/10 text-violet-300 border-violet-500/25'
+                                  : d.uploadedByRole === 'system'
+                                  ? 'bg-slate-700 text-slate-400 border-slate-600'
+                                  : 'bg-sky-500/10 text-sky-300 border-sky-500/25'
+                              }`}>
+                                {d.uploadedBy}
+                              </span>
+                            </div>
+                          ) : <span className="text-slate-600">—</span>}
+                        </td>
+                      )}
                       <td className="text-center px-3 py-2">
                         {d.ocr
                           ? <span className="text-[9px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 rounded px-1.5 py-0.5">Yes</span>
                           : <span className="text-[9px] text-slate-500">No</span>}
                       </td>
                       <td className="text-right px-3 py-2">
-                        <span className={`font-mono text-[11px] ${d.confidence >= 99 ? 'text-emerald-400' : d.confidence >= 97 ? 'text-amber-300' : 'text-orange-300'}`}>{(d.confidence || 0).toFixed(1)}%</span>
+                        <span className={`font-mono text-[11px] ${
+                          !d.confidence ? 'text-slate-500' :
+                          d.confidence >= 99 ? 'text-emerald-400' :
+                          d.confidence >= 97 ? 'text-amber-300' :
+                          'text-orange-300'
+                        }`}>
+                          {d.confidence ? `${(d.confidence || 0).toFixed(1)}%` : '—'}
+                        </span>
                       </td>
                     </tr>
                   ))}
+                  {filtered.length === 0 && (
+                    <tr>
+                      <td colSpan={isAdmin ? 6 : 5} className="px-3 py-8 text-center text-slate-500 text-[11px]">
+                        No documents match the current filter.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

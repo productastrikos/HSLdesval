@@ -500,7 +500,7 @@ export default function KPIDetailModal({ kpi, onClose, showAnalysis = true }) {
         {/* ── FOOTER ─────────────────────────────────────────── */}
         <div className="px-5 py-2.5 flex items-center justify-between" style={{ borderRadius: 0, flexShrink: 0, borderTop: isLight ? '1px solid var(--app-border)' : '1px solid rgba(255,255,255,0.09)' }}>
           <p className="text-[10px] text-slate-400">
-            Last updated: {new Date().toLocaleTimeString()} · App Platform
+            Last updated: {new Date().toLocaleTimeString()} · HSL Design Validator
           </p>
           <button
             onClick={onClose}

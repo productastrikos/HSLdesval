@@ -6,43 +6,50 @@ import AlertPanel from './AlertPanel';
 import AdvisoryPanel from './AdvisoryPanel';
 
 /* ─── Navigation structure ─────────────────────────────── */
+// roles: which roles can see this nav item
 const NAV_SECTIONS = [
   {
     label: 'Overview',
     items: [
-      { path: '/',               icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4', label: 'Dashboard' },
+      { path: '/',               roles: ['admin','user'], icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4', label: 'Dashboard' },
     ],
   },
   {
     label: 'AI Assistant',
     items: [
-      { path: '/chatbot',        icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z', label: 'Design Assistant' },
+      { path: '/chatbot',        roles: ['admin','user'], icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z', label: 'Design Assistant' },
     ],
   },
   {
     label: 'Validation',
     items: [
-      { path: '/documents',      icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', label: 'Document Intel' },
-      { path: '/validator',      icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', label: 'Rule Validator' },
-      { path: '/specifications', icon: 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2zM9 13h6M9 17h6M9 9h1', label: 'Spec Generator' },
+      { path: '/documents',      roles: ['admin','user'], icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', label: 'Document Intel' },
+      { path: '/validator',      roles: ['admin','user'], icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', label: 'Rule Validator' },
+      { path: '/specifications', roles: ['admin'],        icon: 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2zM9 13h6M9 17h6M9 9h1', label: 'Spec Generator' },
     ],
   },
   {
     label: 'Visualization',
     items: [
-      { path: '/visualizer',     icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12', label: '3D Design Viewer' },
+      { path: '/visualizer',     roles: ['admin','user'], icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12', label: '3D Design Viewer' },
     ],
   },
   {
     label: 'Governance',
     items: [
-      { path: '/compliance',     icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', label: 'Compliance & Audit' },
+      { path: '/compliance',     roles: ['admin'],        icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', label: 'Compliance & Audit' },
+    ],
+  },
+  {
+    label: 'Administration',
+    items: [
+      { path: '/users',          roles: ['admin'],        icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', label: 'User Management' },
     ],
   },
   {
     label: 'System',
     items: [
-      { path: '/settings',       icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z', label: 'Settings & AI Config' },
+      { path: '/settings',       roles: ['admin'],        icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z', label: 'Settings & AI Config' },
     ],
   },
 ];
@@ -53,14 +60,15 @@ const NAV_SECTIONS = [
    keywords   = extra words matched against (not displayed)
 ────────────────────────────────────────────────────────── */
 const SEARCH_INDEX = [
-  { label:'Dashboard',             path:'/',                breadcrumb:['Dashboard'],                            icon:'📊', keywords:'overview kpi summary home main metrics validator hsl' },
-  { label:'Design Assistant',      path:'/chatbot',         breadcrumb:['AI Assistant','Chatbot'],               icon:'📊', keywords:'chatbot ai assistant query rule interpret design natural language nlp irs dnv abs iacs imo iec naval' },
-  { label:'Document Intelligence', path:'/documents',       breadcrumb:['Validation','Document Intel'],          icon:'📋', keywords:'document intel ocr scanned pdf extraction parse manual equipment text searchable convert word excel odf' },
-  { label:'Rule Validator',        path:'/validator',       breadcrumb:['Validation','Rule Validator'],          icon:'📈', keywords:'validate compliance rule class irs dnv abs iacs imo iec naval cross reference inconsistency' },
-  { label:'Specification Generator',path:'/specifications', breadcrumb:['Validation','Spec Generator'],          icon:'📋', keywords:'specification generator equipment system technical spec build hvac electrical mechanical piping hull outfit' },
-  { label:'3D Design Viewer',      path:'/visualizer',      breadcrumb:['Visualization','3D Viewer'],            icon:'🗺', keywords:'3d visualizer design viewer ship hull frames bulkhead compartment three dimensional model' },
-  { label:'Compliance & Audit',    path:'/compliance',      breadcrumb:['Governance','Compliance'],              icon:'👥', keywords:'compliance audit trail traceability usage analytics access security defence cyber' },
-  { label:'Settings & AI Config',  path:'/settings',        breadcrumb:['System','Settings'],                    icon:'⚙', keywords:'settings api key anthropic claude ai configuration knowledge base kb rag backend server' },
+  { label:'Dashboard',             path:'/',                breadcrumb:['Dashboard'],                            icon:'📊', keywords:'overview kpi summary home main metrics validator hsl', roles:['admin','user'] },
+  { label:'Design Assistant',      path:'/chatbot',         breadcrumb:['AI Assistant','Chatbot'],               icon:'📊', keywords:'chatbot ai assistant query rule interpret design natural language nlp irs dnv abs iacs imo iec naval', roles:['admin','user'] },
+  { label:'Document Intelligence', path:'/documents',       breadcrumb:['Validation','Document Intel'],          icon:'📋', keywords:'document intel ocr scanned pdf extraction parse manual equipment text searchable convert word excel odf', roles:['admin','user'] },
+  { label:'Rule Validator',        path:'/validator',       breadcrumb:['Validation','Rule Validator'],          icon:'📈', keywords:'validate compliance rule class irs dnv abs iacs imo iec naval cross reference inconsistency', roles:['admin','user'] },
+  { label:'Specification Generator',path:'/specifications', breadcrumb:['Validation','Spec Generator'],          icon:'📋', keywords:'specification generator equipment system technical spec build hvac electrical mechanical piping hull outfit', roles:['admin'] },
+  { label:'3D Design Viewer',      path:'/visualizer',      breadcrumb:['Visualization','3D Viewer'],            icon:'🗺', keywords:'3d visualizer design viewer ship hull frames bulkhead compartment three dimensional model', roles:['admin','user'] },
+  { label:'Compliance & Audit',    path:'/compliance',      breadcrumb:['Governance','Compliance'],              icon:'👥', keywords:'compliance audit trail traceability usage analytics access security defence cyber', roles:['admin'] },
+  { label:'User Management',       path:'/users',           breadcrumb:['Administration','Users'],               icon:'👥', keywords:'users accounts roles admin engineer access management permissions', roles:['admin'] },
+  { label:'Settings & AI Config',  path:'/settings',        breadcrumb:['System','Settings'],                    icon:'⚙', keywords:'settings api key anthropic claude ai configuration knowledge base kb rag backend server', roles:['admin'] },
 ];
 
 /* ─── Icon helper ──────────────────────────────────────── */
@@ -96,10 +104,14 @@ const PAGE_TITLES = {
   '/specifications':  'Specification Generator',
   '/visualizer':      '3D Design Viewer',
   '/compliance':      'Compliance & Audit',
+  '/users':           'User Management',
   '/settings':        'Settings & AI Config',
 };
 
+const ROLE_DISPLAY = { admin: 'Administrator', user: 'Design Engineer' };
+
 export default function Layout({ children, user, onLogout, theme = 'dark', onThemeToggle }) {
+  const userRole = user?.role || 'user';
   const navigate  = useNavigate();
   const location  = useLocation();
   const { alerts, advisories } = useData();
@@ -142,7 +154,8 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
     const words = q.split(/\s+/).filter(Boolean);
-    const scored = SEARCH_INDEX.map(item => {
+    const visibleIndex = SEARCH_INDEX.filter(item => !item.roles || item.roles.includes(userRole));
+    const scored = visibleIndex.map(item => {
       const haystack = [
         item.label,
         ...(item.breadcrumb || []),
@@ -218,49 +231,85 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2">
-          {NAV_SECTIONS.map((section) => (
-            <div key={section.label}>
-              {sidebarOpen && (
-                <p className="nav-section-label">{section.label}</p>
-              )}
-              {!sidebarOpen && <div className="h-3" />}
-              {section.items.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <div key={item.path} className="px-2">
-                    <button
-                      onClick={() => navigate(item.path)}
-                      className={`nav-item w-full ${isActive ? 'active' : ''}`}
-                      title={!sidebarOpen ? item.label : undefined}
-                    >
-                      <SvgIcon d={item.icon} />
-                      {sidebarOpen && <span className="truncate">{item.label}</span>}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
+          {NAV_SECTIONS.map((section) => {
+            const visible = section.items.filter(item => !item.roles || item.roles.includes(userRole));
+            if (!visible.length) return null;
+            return (
+              <div key={section.label}>
+                {sidebarOpen && (
+                  <p className="nav-section-label">{section.label}</p>
+                )}
+                {!sidebarOpen && <div className="h-3" />}
+                {visible.map((item) => {
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <div key={item.path} className="px-2">
+                      <button
+                        onClick={() => navigate(item.path)}
+                        className={`nav-item w-full ${isActive ? 'active' : ''}`}
+                        title={!sidebarOpen ? item.label : undefined}
+                      >
+                        <SvgIcon d={item.icon} />
+                        {sidebarOpen && <span className="truncate">{item.label}</span>}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </nav>
 
         {/* Bottom: user + logout */}
         <div className="shrink-0 border-t border-app-border">
-          {sidebarOpen && (
-            <div className="flex items-center gap-3 px-4 py-3">
-              <div
-                className="w-8 h-8 rounded-lg bg-app-accent flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-              >
-                {user?.fullName?.charAt(0) || 'U'}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold truncate" style={{ color: 'var(--app-text)' }}>{user?.fullName}</div>
-                <div className="text-[10px] truncate capitalize" style={{ color: 'var(--app-text-faint)' }}>
-                  {user?.role?.replace('_', ' ')}
+          {sidebarOpen ? (
+            <div className="px-3 py-3 space-y-2">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                  style={{ background: userRole === 'admin'
+                    ? 'linear-gradient(135deg,#7c3aed,#a855f7)'
+                    : 'linear-gradient(135deg,#0ea5e9,#38bdf8)' }}
+                >
+                  {user?.fullName?.charAt(0) || 'U'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold truncate" style={{ color: 'var(--app-text)' }}>{user?.fullName}</div>
+                  <div className="text-[9px] font-bold uppercase tracking-wider"
+                    style={{ color: userRole === 'admin' ? '#a78bfa' : '#38bdf8' }}>
+                    {ROLE_DISPLAY[userRole] || userRole}
+                  </div>
                 </div>
               </div>
+              {onLogout && (
+                <button
+                  onClick={onLogout}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-[11px] text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7}
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Sign Out
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="px-2 py-3 flex flex-col items-center gap-2">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+                style={{ background: userRole === 'admin' ? 'linear-gradient(135deg,#7c3aed,#a855f7)' : 'linear-gradient(135deg,#0ea5e9,#38bdf8)' }}>
+                {user?.fullName?.charAt(0) || 'U'}
+              </div>
+              {onLogout && (
+                <button onClick={onLogout} className="icon-btn" title="Sign Out">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7}
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              )}
             </div>
           )}
-          <div className="px-2 pb-3" />
         </div>
       </aside>
 
@@ -435,27 +484,44 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
             {showProfile && (
               <div className="profile-menu" role="menu">
                 <div className="profile-menu-header">
-                  <div className="avatar">{user?.fullName?.charAt(0) || 'U'}</div>
+                  <div className="avatar"
+                    style={{ background: userRole === 'admin'
+                      ? 'linear-gradient(135deg,#7c3aed,#a855f7)'
+                      : 'linear-gradient(135deg,#0ea5e9,#38bdf8)' }}>
+                    {user?.fullName?.charAt(0) || 'U'}
+                  </div>
                   <div className="min-w-0">
                     <div className="name truncate">{user?.fullName || 'Account'}</div>
-                    <div className="status">Online</div>
+                    <div className="status" style={{ color: userRole === 'admin' ? '#a78bfa' : '#38bdf8' }}>
+                      {ROLE_DISPLAY[userRole] || userRole}
+                    </div>
                   </div>
                 </div>
                 <div className="profile-menu-section">
-                  <button className="profile-menu-item" role="menuitem" onClick={() => { setShowProfile(false); navigate('/profile'); }}>
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                    Profile
-                  </button>
                   <button className="profile-menu-item" role="menuitem" onClick={() => { setShowProfile(false); setShowAlerts(true); setShowAdvisory(false); }}>
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-                    Notification
+                    Notifications
                   </button>
                   <button className="profile-menu-item" role="menuitem" onClick={() => { setShowProfile(false); onThemeToggle && onThemeToggle(); }}>
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                    Settings
+                    Toggle Theme
                   </button>
+                  {userRole === 'admin' && (
+                    <button className="profile-menu-item" role="menuitem" onClick={() => { setShowProfile(false); navigate('/users'); }}>
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                      User Management
+                    </button>
+                  )}
                 </div>
                 <div className="profile-menu-section">
+                  {onLogout && (
+                    <button className="profile-menu-item" role="menuitem"
+                      style={{ color: '#f87171' }}
+                      onClick={() => { setShowProfile(false); onLogout(); }}>
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                      Sign Out
+                    </button>
+                  )}
                 </div>
               </div>
             )}

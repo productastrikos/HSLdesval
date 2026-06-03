@@ -77,7 +77,7 @@ const DOMAIN_QUERIES = {
  * Ingest a document: chunk → embed → index in BM25 + vector store.
  * Returns the number of chunks added.
  */
-async function addDocument({ id, name, type, text }) {
+async function addDocument({ id, name, type, text, uploadedBy = 'system', uploadedByRole = 'system', docCategory = 'compliance' }) {
   if (docStore.has(id)) return 0;
 
   // Store document metadata (cap text at 2 MB to avoid memory issues)
@@ -86,6 +86,10 @@ async function addDocument({ id, name, type, text }) {
     text: text.slice(0, 2_000_000),
     addedAt: new Date().toISOString(),
     chunkCount: 0,
+    pages: Math.ceil(text.length / 3000),
+    uploadedBy,
+    uploadedByRole,
+    docCategory,
   });
 
   const rawChunks = chunkText(text);
@@ -238,8 +242,8 @@ function getDocText(id) {
 }
 
 function getAllDocs() {
-  return [...docStore.values()].map(({ id, name, type, addedAt, chunkCount }) => ({
-    id, name, type, addedAt, chunkCount,
+  return [...docStore.values()].map(({ id, name, type, addedAt, chunkCount, pages, uploadedBy, uploadedByRole, docCategory }) => ({
+    id, name, type, addedAt, chunkCount, pages, uploadedBy, uploadedByRole, docCategory,
   }));
 }
 

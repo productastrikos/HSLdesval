@@ -2,7 +2,7 @@
 // HSL Design Validator — Express API Server
 // ─────────────────────────────────────────────────────────────────────────────
 
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 
 const express = require('express');
 const cors    = require('cors');
@@ -10,7 +10,10 @@ const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 const rag     = require('./rag');
+const bcrypt  = require('bcryptjs');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { sign, authenticate, requireAdmin } = require('./auth/middleware');
+const userStore = require('./auth/users');
 
 if (!process.env.GEMINI_API_KEY) {
   console.error('[FATAL] GEMINI_API_KEY is not set. Add it to server/.env');
@@ -19,8 +22,10 @@ if (!process.env.GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+
 function getGeminiModel(systemInstruction) {
-  const opts = { model: 'gemini-2.0-flash' };
+  const opts = { model: GEMINI_MODEL };
   if (systemInstruction) opts.systemInstruction = systemInstruction;
   return genAI.getGenerativeModel(opts);
 }
@@ -30,6 +35,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// Document types that only administrators may upload
+const COMPLIANCE_DOC_TYPES = new Set(['Class Rule', 'IACS', 'IMO', 'IEC', 'Naval', 'Build Spec']);
 
 // ── Boot: initialise knowledge base (async, non-blocking) ─────────────────────
 rag.initializeKnowledgeBase()
@@ -81,9 +89,104 @@ function dedupeContext(chunks) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AUTH  — public endpoints (no token required)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// POST /api/auth/login
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password are required' });
+
+    const user = userStore.findByUsername(username.trim().toLowerCase());
+    if (!user) return res.status(401).json({ error: 'Invalid username or password' });
+
+    const valid = bcrypt.compareSync(password, user.passwordHash);
+    if (!valid)  return res.status(401).json({ error: 'Invalid username or password' });
+
+    const token = sign(user);
+    res.json({
+      token,
+      user: { id: user.id, username: user.username, fullName: user.fullName, role: user.role },
+    });
+  } catch (err) {
+    console.error('[/api/auth/login]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/health — public (for connectivity check)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), ...rag.getStatus() });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Authenticated-only routes below this line
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/auth/me
+app.get('/api/auth/me', authenticate, (req, res) => {
+  res.json({ user: req.user });
+});
+
+// ── User management (admin only) ──────────────────────────────────────────────
+
+// GET /api/auth/users
+app.get('/api/auth/users', authenticate, requireAdmin, (req, res) => {
+  res.json(userStore.getAll());
+});
+
+// POST /api/auth/users
+app.post('/api/auth/users', authenticate, requireAdmin, (req, res) => {
+  try {
+    const { username, password, fullName, role } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password are required' });
+    const user = userStore.create({ username, password, fullName, role });
+    res.status(201).json(user);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PUT /api/auth/users/:id
+app.put('/api/auth/users/:id', authenticate, requireAdmin, (req, res) => {
+  try {
+    // Prevent demoting the last admin
+    if (req.body.role === 'user') {
+      const admins = userStore.getAll().filter(u => u.role === 'admin');
+      if (admins.length === 1 && admins[0].id === req.params.id) {
+        return res.status(400).json({ error: 'Cannot demote the last administrator' });
+      }
+    }
+    const updated = userStore.update(req.params.id, req.body);
+    res.json(updated);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /api/auth/users/:id
+app.delete('/api/auth/users/:id', authenticate, requireAdmin, (req, res) => {
+  try {
+    if (req.params.id === req.user.id) {
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
+    const admins = userStore.getAll().filter(u => u.role === 'admin');
+    const target = userStore.getAll().find(u => u.id === req.params.id);
+    if (target?.role === 'admin' && admins.length === 1) {
+      return res.status(400).json({ error: 'Cannot delete the last administrator' });
+    }
+    userStore.remove(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // CHAT  POST /api/chat
 // ─────────────────────────────────────────────────────────────────────────────
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', authenticate, async (req, res) => {
   try {
     const { messages = [], domain } = req.body;
 
@@ -129,7 +232,7 @@ app.post('/api/chat', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // VALIDATE  POST /api/validate
 // ─────────────────────────────────────────────────────────────────────────────
-app.post('/api/validate', async (req, res) => {
+app.post('/api/validate', authenticate, async (req, res) => {
   try {
     const { specId, domain, additionalContext } = req.body;
 
@@ -187,9 +290,9 @@ Return 4–8 findings covering different rule areas. Reference specific clause n
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GENERATE SPEC  POST /api/generate-spec
+// GENERATE SPEC  POST /api/generate-spec  (admin only)
 // ─────────────────────────────────────────────────────────────────────────────
-app.post('/api/generate-spec', async (req, res) => {
+app.post('/api/generate-spec', authenticate, requireAdmin, async (req, res) => {
   try {
     const { domain, vessel, lbp, classSociety, includeNaval } = req.body;
 
@@ -285,7 +388,7 @@ Each section must be detailed (4–8 sentences), reference specific clause numbe
 // COMPARE DOCUMENTS  POST /api/compare
 // Body: { docAId, docBId } OR { docAText, docBText, docAName, docBName }
 // ─────────────────────────────────────────────────────────────────────────────
-app.post('/api/compare', async (req, res) => {
+app.post('/api/compare', authenticate, async (req, res) => {
   try {
     let { docAId, docBId, docAText, docBText, docAName, docBName } = req.body;
 
@@ -347,11 +450,18 @@ Return 5–12 differences covering structural, numerical, and textual changes.`;
 // ─────────────────────────────────────────────────────────────────────────────
 // UPLOAD DOCUMENT  POST /api/upload
 // ─────────────────────────────────────────────────────────────────────────────
-app.post('/api/upload', upload.single('file'), async (req, res) => {
+app.post('/api/upload', authenticate, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
 
     const { docType, docName } = req.body;
+    const type = docType || 'Upload';
+
+    // Compliance documents require admin role
+    if (COMPLIANCE_DOC_TYPES.has(type) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only administrators can upload compliance / guardrail documents.' });
+    }
+
     const name = docName || req.file.originalname;
     let text   = '';
     const mime = req.file.mimetype;
@@ -380,13 +490,23 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       return res.status(422).json({ error: 'Could not extract text from file. Try a text-based PDF or DOCX.' });
     }
 
-    const docId  = 'DOC-' + Date.now();
-    const chunks = await rag.addDocument({ id: docId, name, type: docType || 'Upload', text });
+    const docId       = 'DOC-' + Date.now();
+    const docCategory = COMPLIANCE_DOC_TYPES.has(type) ? 'compliance' : 'vendor';
+
+    const chunks = await rag.addDocument({
+      id:             docId,
+      name,
+      type,
+      text,
+      uploadedBy:     req.user.username,
+      uploadedByRole: req.user.role,
+      docCategory,
+    });
 
     res.json({
       docId,
       name,
-      type:       docType || 'Upload',
+      type,
       pages:      Math.ceil(text.length / 3000),
       chunks,
       textLength: text.length,
@@ -400,7 +520,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // RETRIEVE (debug / inspection)  GET /api/retrieve?q=...&k=5&domain=Hull
 // ─────────────────────────────────────────────────────────────────────────────
-app.get('/api/retrieve', async (req, res) => {
+app.get('/api/retrieve', authenticate, async (req, res) => {
   try {
     const { q, k = '5', domain } = req.query;
     if (!q) return res.status(400).json({ error: 'q query parameter is required' });
@@ -415,22 +535,15 @@ app.get('/api/retrieve', async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // KB STATUS  GET /api/kb-status
 // ─────────────────────────────────────────────────────────────────────────────
-app.get('/api/kb-status', (req, res) => {
+app.get('/api/kb-status', authenticate, (req, res) => {
   res.json(rag.getStatus());
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DOCUMENTS LIST  GET /api/documents
 // ─────────────────────────────────────────────────────────────────────────────
-app.get('/api/documents', (req, res) => {
+app.get('/api/documents', authenticate, (req, res) => {
   res.json(rag.getAllDocs());
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HEALTH  GET /api/health
-// ─────────────────────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), ...rag.getStatus() });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
