@@ -5,8 +5,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Dashboard     from './pages/Dashboard';
 import Chatbot       from './pages/Chatbot';
 import Documents     from './pages/Documents';
-import Validator     from './pages/Validator';
-import Specifications from './pages/Specifications';
 import Visualizer3D  from './pages/Visualizer3D';
 import Settings      from './pages/Settings';
 import UserManagement from './pages/UserManagement';
@@ -61,11 +59,9 @@ function AppRoutes() {
         <Route path="/"           element={<Dashboard />} />
         <Route path="/chatbot"    element={<Chatbot />} />
         <Route path="/documents"  element={<Documents />} />
-        <Route path="/validator"  element={<Validator />} />
         <Route path="/visualizer" element={<Visualizer3D />} />
 
         {/* Admin-only routes */}
-        <Route path="/specifications" element={<AdminRoute><Specifications /></AdminRoute>} />
         <Route path="/settings"       element={<AdminRoute><Settings /></AdminRoute>} />
         <Route path="/users"          element={<AdminRoute><UserManagement /></AdminRoute>} />
 

@@ -57,10 +57,6 @@ export async function validate(specId, domain, additionalContext) {
   return post('/validate', { specId, domain, additionalContext });
 }
 
-export async function generateSpec({ domain, vessel, lbp, classSociety, includeNaval }) {
-  return post('/generate-spec', { domain, vessel, lbp, classSociety, includeNaval });
-}
-
 export async function compareByIds(docAId, docBId, docAName, docBName) {
   return post('/compare', { docAId, docBId, docAName, docBName });
 }

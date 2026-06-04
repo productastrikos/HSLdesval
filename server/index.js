@@ -289,100 +289,6 @@ Return 4–8 findings covering different rule areas. Reference specific clause n
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// GENERATE SPEC  POST /api/generate-spec  (admin only)
-// ─────────────────────────────────────────────────────────────────────────────
-app.post('/api/generate-spec', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const { domain, vessel, lbp, classSociety, includeNaval } = req.body;
-
-    // Retrieve domain rules + IMO/SOLAS/MARPOL context if relevant
-    const [domainRules, generalRules] = await Promise.all([
-      rag.retrieveForDomain(domain, 10),
-      rag.retrieve(`${classSociety} ${domain} ${vessel} vessel ${lbp}m design requirements`, 4),
-    ]);
-
-    const rules = dedupeContext([...domainRules, ...generalRules]).slice(0, 14);
-
-    const prompt = `Generate a complete, rule-compliant technical specification for a ship system.
-
-Parameters:
-- Engineering Domain: ${domain}
-- Vessel / Project: ${vessel}
-- Length Between Perpendiculars (LBP): ${lbp} m
-- Classification Society: ${classSociety}
-- Include Naval / NSQR clauses: ${includeNaval ? 'Yes' : 'No'}
-
-Applicable rules and standards (use these to provide specific clause citations):
-${rules.map(c => {
-  const sec = c.section ? ` [${c.section}]` : '';
-  return `[${c.source}${sec}]\n${c.text}`;
-}).join('\n\n')}
-
-Return a JSON object with this exact structure (no other text):
-{
-  "sections": [
-    { "heading": "Section title", "body": "Detailed content with specific clause references" },
-    ...
-  ],
-  "citations": ["Full citation 1", "Full citation 2", ...]
-}
-
-Include these sections (8–10 total):
-1. Scope and Application
-2. Applicable Rules and Standards
-3. Design Basis and Parameters
-4. Material Requirements
-5. Design Requirements
-6. Construction and Fabrication
-7. Testing and Inspection
-8. Documentation Requirements
-${includeNaval ? '9. Naval / NSQR Requirements\n' : ''}
-Each section must be detailed (4–8 sentences), reference specific clause numbers, and be appropriate for the ${domain} domain on a ${lbp} m vessel classed by ${classSociety}.`;
-
-    const model  = getGeminiModel();
-    const result = await model.generateContent(prompt);
-    const text   = result.response.text();
-    let sections  = [];
-    let citations = [];
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        sections  = parsed.sections  || [];
-        citations = parsed.citations || [];
-      } catch (_) {}
-    }
-
-    // Fallback: parse numbered sections from plain text
-    if (!sections.length) {
-      const parts = text.split(/\n(?=\d+\.\s+[A-Z])/);
-      for (const part of parts) {
-        const nl = part.indexOf('\n');
-        if (nl > 0) {
-          sections.push({
-            heading: part.slice(0, nl).replace(/^\d+\.\s+/, '').trim(),
-            body:    part.slice(nl + 1).trim(),
-          });
-        }
-      }
-    }
-
-    res.json({
-      spec: {
-        title:    `${domain} System — ${vessel} — Technical Specification`,
-        revision: 'Rev.A (AI Draft)',
-        sections,
-        meta: { vessel, lbp: `${lbp} m`, classSociety, domain },
-      },
-      citations,
-    });
-  } catch (err) {
-    console.error('[/api/generate-spec]', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPARE DOCUMENTS  POST /api/compare
@@ -466,6 +372,14 @@ app.post('/api/upload', authenticate, upload.single('file'), async (req, res) =>
     let text   = '';
     const mime = req.file.mimetype;
 
+    // Reject image files — no OCR engine available server-side
+    const IMAGE_TYPES = new Set(['image/png','image/jpeg','image/jpg','image/tiff','image/tif','image/gif','image/webp','image/bmp']);
+    if (IMAGE_TYPES.has(mime) || /\.(png|jpe?g|tiff?|gif|webp|bmp)$/i.test(req.file.originalname)) {
+      return res.status(422).json({
+        error: 'Image files have no text layer and cannot be indexed directly. Use the "Convert PDF → Editable" tool to extract text first, then upload the resulting file.',
+      });
+    }
+
     if (mime === 'application/pdf' || req.file.originalname.endsWith('.pdf')) {
       try {
         const pdfParse = require('pdf-parse');
@@ -513,6 +427,89 @@ app.post('/api/upload', authenticate, upload.single('file'), async (req, res) =>
     });
   } catch (err) {
     console.error('[/api/upload]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CONVERT DOCUMENT  POST /api/convert
+// Body (multipart): file, format (TXT | XLSX | DOCX | ODF)
+// Returns the converted file as a download.
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/convert', authenticate, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+
+    const format   = (req.body.format || 'TXT').toUpperCase();
+    const mime     = req.file.mimetype;
+    const origName = req.file.originalname;
+    const baseName = origName.replace(/\.[^/.]+$/, '');
+
+    // ── Extract text ─────────────────────────────────────────────────────────
+    let text = '';
+    const IMAGE_MIME = new Set(['image/png','image/jpeg','image/jpg','image/gif','image/webp','image/bmp']);
+
+    if (mime === 'application/pdf' || origName.endsWith('.pdf')) {
+      const pdfParse = require('pdf-parse');
+      const data     = await pdfParse(req.file.buffer);
+      text = data.text || '';
+    } else if (
+      mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      origName.endsWith('.docx')
+    ) {
+      const mammoth = require('mammoth');
+      const result  = await mammoth.extractRawText({ buffer: req.file.buffer });
+      text = result.value || '';
+    } else if (IMAGE_MIME.has(mime) || /\.(png|jpe?g|gif|webp|bmp)$/i.test(origName)) {
+      // Use Gemini vision to OCR the image
+      const imgMime  = IMAGE_MIME.has(mime) ? mime : 'image/jpeg';
+      const base64   = req.file.buffer.toString('base64');
+      const model    = getGeminiModel();
+      const result   = await model.generateContent([
+        { inlineData: { mimeType: imgMime, data: base64 } },
+        'Extract all visible text from this image exactly as it appears. Preserve layout structure using line breaks and spacing. Output only the extracted text with no commentary or explanation.',
+      ]);
+      text = result.response.text();
+    } else {
+      text = req.file.buffer.toString('utf8');
+    }
+
+    if (!text.trim()) {
+      return res.status(422).json({ error: 'Could not extract text from file. Ensure the PDF has a text layer or the image contains readable text.' });
+    }
+
+    // ── Produce output ───────────────────────────────────────────────────────
+    if (format === 'XLSX') {
+      const XLSX  = require('xlsx');
+      const lines = text.split('\n');
+      // Build rows: each non-empty line → own row; try to split on common delimiters for table-like content
+      const rows = lines.map(line => {
+        const cols = line.split(/\t|  {2,}/).map(c => c.trim()).filter(Boolean);
+        return cols.length > 1 ? cols : [line];
+      });
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Extracted');
+      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.xlsx"`);
+      return res.send(buf);
+    }
+
+    if (format === 'TXT') {
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.txt"`);
+      return res.send(text);
+    }
+
+    // DOCX and ODF: export as plain-text with the requested extension
+    // (full DOCX/ODF generation requires additional libraries not in scope)
+    const ext = format === 'DOCX' ? 'docx' : 'odt';
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${baseName}.${ext}"`);
+    return res.send(text);
+  } catch (err) {
+    console.error('[/api/convert]', err.message);
     res.status(500).json({ error: err.message });
   }
 });

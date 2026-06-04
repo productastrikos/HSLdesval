@@ -260,34 +260,54 @@ function getStatus() {
 
 // ── Static knowledge-base initialisation ──────────────────────────────────────
 
-async function initializeKnowledgeBase() {
-  const docsDir    = path.join(__dirname, '..', 'docs');
-  const staticDocs = [
-    { file: 'IRS_Hull_Part3.txt',            id: 'STATIC-IRS-HULL',    name: 'IRS Rules 2024 — Part 3 Hull Structures',                    type: 'Class Rule' },
-    { file: 'IRS_Naval_NSQR.txt',            id: 'STATIC-IRS-NAVAL',   name: 'IRS Naval Ship Rules — NSQR Shock / EMC / NBC',               type: 'Naval'      },
-    { file: 'IACS_Unified_Requirements.txt', id: 'STATIC-IACS',        name: 'IACS Unified Requirements 2024 (S/W/M/E/P/Z series)',         type: 'IACS'       },
-    { file: 'IMO_MARPOL.txt',                id: 'STATIC-IMO-MARPOL',  name: 'IMO MARPOL 73/78 Consolidated — Annex I to VI',              type: 'IMO'        },
-    { file: 'IMO_SOLAS.txt',                 id: 'STATIC-IMO-SOLAS',   name: 'IMO SOLAS 2020 Consolidated — Ch.I to XI',                   type: 'IMO'        },
-    { file: 'IEC_60092.txt',                 id: 'STATIC-IEC-60092',   name: 'IEC 60092 Series — Electrical Installations in Ships',       type: 'IEC'        },
-    { file: 'DNV_Rules_Part4.txt',           id: 'STATIC-DNV',         name: 'DNV Rules for Classification — Part 4 Systems & Components',  type: 'Class Rule' },
-    { file: 'ABS_Rules_Part4.txt',           id: 'STATIC-ABS',         name: 'ABS Steel Vessels Rules 2024 — Part 4 Machinery & Systems',  type: 'Class Rule' },
-  ];
+// ── Static knowledge-base documents (server/docs/) ───────────────────────────
+const KB_DOC_META = {
+  'SOLAS CONSOLIDATED-20 (1).pdf':                                   { id: 'STATIC-SOLAS',      name: 'SOLAS Consolidated Edition 2020',               type: 'IMO',        docCategory: 'compliance' },
+  'Life-Safing Appliances including LSA Code. 2010 Edition (1).pdf': { id: 'STATIC-LSA',        name: 'Life-Saving Appliances & LSA Code 2010',        type: 'IMO',        docCategory: 'compliance' },
+  'main_rules_july_2024-edition.pdf':                                { id: 'STATIC-MAIN-RULES', name: 'Main Classification Rules — July 2024 Edition',  type: 'Class Rule', docCategory: 'compliance' },
+  'BUILD SPECIFICATION  - input file.pdf':                           { id: 'STATIC-BUILD-SPEC', name: 'Build Specification — Input File',               type: 'Build Spec', docCategory: 'compliance' },
+};
 
+async function initializeKnowledgeBase() {
+  const pdfParse = require('pdf-parse');
+  const docsDir  = path.join(__dirname, '..', 'docs');
+
+  if (!fs.existsSync(docsDir)) {
+    console.warn('[RAG] docs directory not found:', docsDir);
+    _kbReady = true;
+    return;
+  }
+
+  const files = fs.readdirSync(docsDir).filter(f => /\.pdf$/i.test(f));
   let total = 0;
-  for (const doc of staticDocs) {
-    const fp = path.join(docsDir, doc.file);
+
+  for (const file of files) {
+    const meta = KB_DOC_META[file] || {
+      id:          'STATIC-' + file.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').toUpperCase().replace(/\.PDF-?$/, ''),
+      name:        file.replace(/\.pdf$/i, ''),
+      type:        'Technical',
+      docCategory: 'vendor',
+    };
+
+    const fp = path.join(docsDir, file);
     try {
-      const text = fs.readFileSync(fp, 'utf8');
-      const n    = await addDocument({ id: doc.id, name: doc.name, type: doc.type, text });
+      const buffer = fs.readFileSync(fp);
+      const data   = await pdfParse(buffer);
+      const text   = data.text || '';
+      if (!text.trim()) {
+        console.warn(`[RAG] No text extracted from "${file}" — skipped`);
+        continue;
+      }
+      const n = await addDocument({ ...meta, text, uploadedBy: 'system', uploadedByRole: 'system' });
       total += n;
-      console.log(`[RAG] "${doc.name}" → ${n} chunks`);
+      console.log(`[RAG] "${meta.name}" → ${n} chunks`);
     } catch (err) {
-      console.warn(`[RAG] Skipped ${doc.file}: ${err.message}`);
+      console.warn(`[RAG] Skipped "${file}": ${err.message}`);
     }
   }
 
   _kbReady = true;
-  flushCache();  // persist all embeddings to disk now
+  flushCache();
   console.log(`[RAG] Ready — ${docStore.size} docs | ${total} chunks | ${vecStore.size} vectors | ${bm25.size} BM25 docs`);
 }
 

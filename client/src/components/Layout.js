@@ -20,8 +20,6 @@ const NAV_SECTIONS = [
     label: 'Validation',
     items: [
       { path: '/documents',      roles: ['admin','user'], icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', label: 'Document Intel' },
-      { path: '/validator',      roles: ['admin','user'], icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z', label: 'Rule Validator' },
-      { path: '/specifications', roles: ['admin'],        icon: 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2zM9 13h6M9 17h6M9 9h1', label: 'Spec Generator' },
     ],
   },
   {
@@ -53,8 +51,6 @@ const SEARCH_INDEX = [
   { label:'Dashboard',             path:'/',                breadcrumb:['Dashboard'],                            icon:'📊', keywords:'overview kpi summary home main metrics validator hsl', roles:['admin','user'] },
   { label:'Design Assistant',      path:'/chatbot',         breadcrumb:['AI Assistant','Chatbot'],               icon:'📊', keywords:'chatbot ai assistant query rule interpret design natural language nlp irs dnv abs iacs imo iec naval', roles:['admin','user'] },
   { label:'Document Intelligence', path:'/documents',       breadcrumb:['Validation','Document Intel'],          icon:'📋', keywords:'document intel ocr scanned pdf extraction parse manual equipment text searchable convert word excel odf', roles:['admin','user'] },
-  { label:'Rule Validator',        path:'/validator',       breadcrumb:['Validation','Rule Validator'],          icon:'📈', keywords:'validate compliance rule class irs dnv abs iacs imo iec naval cross reference inconsistency', roles:['admin','user'] },
-  { label:'Specification Generator',path:'/specifications', breadcrumb:['Validation','Spec Generator'],          icon:'📋', keywords:'specification generator equipment system technical spec build hvac electrical mechanical piping hull outfit', roles:['admin'] },
   { label:'3D Design Viewer',      path:'/visualizer',      breadcrumb:['Visualization','3D Viewer'],            icon:'🗺', keywords:'3d visualizer design viewer ship hull frames bulkhead compartment three dimensional model', roles:['admin','user'] },
   { label:'User Management',       path:'/users',           breadcrumb:['Administration','Users'],               icon:'👥', keywords:'users accounts roles admin engineer access management permissions', roles:['admin'] },
   { label:'Settings & AI Config',  path:'/settings',        breadcrumb:['System','Settings'],                    icon:'⚙', keywords:'settings api key anthropic claude ai configuration knowledge base kb rag backend server', roles:['admin'] },
@@ -89,8 +85,6 @@ const PAGE_TITLES = {
   '/':                'Dashboard',
   '/chatbot':         'Design Assistant',
   '/documents':       'Document Intelligence',
-  '/validator':       'Rule Validator',
-  '/specifications':  'Specification Generator',
   '/visualizer':      '3D Design Viewer',
   '/users':           'User Management',
   '/settings':        'Settings & AI Config',
