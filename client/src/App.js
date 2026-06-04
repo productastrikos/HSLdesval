@@ -9,7 +9,6 @@ import Documents     from './pages/Documents';
 import Validator     from './pages/Validator';
 import Specifications from './pages/Specifications';
 import Visualizer3D  from './pages/Visualizer3D';
-import Compliance    from './pages/Compliance';
 import Settings      from './pages/Settings';
 import UserManagement from './pages/UserManagement';
 import Login         from './pages/Login';
@@ -72,7 +71,6 @@ function AppRoutes() {
 
         {/* Admin-only routes */}
         <Route path="/specifications" element={<AdminRoute><Specifications /></AdminRoute>} />
-        <Route path="/compliance"     element={<AdminRoute><Compliance /></AdminRoute>} />
         <Route path="/settings"       element={<AdminRoute><Settings /></AdminRoute>} />
         <Route path="/users"          element={<AdminRoute><UserManagement /></AdminRoute>} />
 

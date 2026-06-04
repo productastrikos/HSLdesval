@@ -463,38 +463,6 @@ export default function KPIDetailModal({ kpi, onClose, showAnalysis = true }) {
             </div>
           </div>
 
-          {/* ── ROW 3: AI Advisory — full-width bottom bar ───────────────── */}
-          {showAnalysis && analyses.length > 0 && (
-            <div style={{
-              flexShrink: 0,
-              background: 'var(--app-modal-advisory-bg)',
-              border: '1px solid var(--app-modal-advisory-border)',
-              borderRadius: 12,
-              padding: '10px 14px',
-            }}>
-              {/* Header row */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--app-advisory)', textTransform: 'uppercase', letterSpacing: '0.18em', flexShrink: 0 }}>✦ AI Advisory</span>
-                <div style={{ flex: 1, height: '1px', background: innerDiv }} />
-                <span style={{ fontSize: 9, color: 'var(--app-text-faint)', fontStyle: 'italic', flexShrink: 0 }}>Platform Insight Engine</span>
-              </div>
-              {/* 3-column insight grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0 14px' }}>
-                {analyses.slice(0, 3).map((s, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                    <span style={{
-                      minWidth: 17, height: 17, borderRadius: '50%',
-                      background: 'var(--app-advisory)', color: 'var(--app-panel)',
-                      fontWeight: 800, fontSize: 9, flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      marginTop: 1,
-                    }}>{i + 1}</span>
-                    <p style={{ fontSize: 10, color: 'var(--app-text)', lineHeight: 1.5 }}>{s.trim()}.</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* ── FOOTER ─────────────────────────────────────────── */}

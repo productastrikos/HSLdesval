@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../services/socket';
-import { isConfigured } from '../services/aiService';
 import AlertPanel from './AlertPanel';
-import AdvisoryPanel from './AdvisoryPanel';
 
 /* ─── Navigation structure ─────────────────────────────── */
 // roles: which roles can see this nav item
@@ -35,12 +33,6 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    label: 'Governance',
-    items: [
-      { path: '/compliance',     roles: ['admin'],        icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z', label: 'Compliance & Audit' },
-    ],
-  },
-  {
     label: 'Administration',
     items: [
       { path: '/users',          roles: ['admin'],        icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', label: 'User Management' },
@@ -66,7 +58,6 @@ const SEARCH_INDEX = [
   { label:'Rule Validator',        path:'/validator',       breadcrumb:['Validation','Rule Validator'],          icon:'📈', keywords:'validate compliance rule class irs dnv abs iacs imo iec naval cross reference inconsistency', roles:['admin','user'] },
   { label:'Specification Generator',path:'/specifications', breadcrumb:['Validation','Spec Generator'],          icon:'📋', keywords:'specification generator equipment system technical spec build hvac electrical mechanical piping hull outfit', roles:['admin'] },
   { label:'3D Design Viewer',      path:'/visualizer',      breadcrumb:['Visualization','3D Viewer'],            icon:'🗺', keywords:'3d visualizer design viewer ship hull frames bulkhead compartment three dimensional model', roles:['admin','user'] },
-  { label:'Compliance & Audit',    path:'/compliance',      breadcrumb:['Governance','Compliance'],              icon:'👥', keywords:'compliance audit trail traceability usage analytics access security defence cyber', roles:['admin'] },
   { label:'User Management',       path:'/users',           breadcrumb:['Administration','Users'],               icon:'👥', keywords:'users accounts roles admin engineer access management permissions', roles:['admin'] },
   { label:'Settings & AI Config',  path:'/settings',        breadcrumb:['System','Settings'],                    icon:'⚙', keywords:'settings api key anthropic claude ai configuration knowledge base kb rag backend server', roles:['admin'] },
 ];
@@ -103,7 +94,6 @@ const PAGE_TITLES = {
   '/validator':       'Rule Validator',
   '/specifications':  'Specification Generator',
   '/visualizer':      '3D Design Viewer',
-  '/compliance':      'Compliance & Audit',
   '/users':           'User Management',
   '/settings':        'Settings & AI Config',
 };
@@ -114,9 +104,8 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
   const userRole = user?.role || 'user';
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { alerts, advisories } = useData();
+  const { alerts } = useData();
   const [showAlerts,   setShowAlerts]   = useState(false);
-  const [showAdvisory, setShowAdvisory] = useState(false);
   const [showProfile,  setShowProfile]  = useState(false);
   const [time,         setTime]         = useState(new Date());
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
@@ -392,19 +381,6 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
           <div className="flex-1" />
 
           {/* AI status chip */}
-          <button
-            onClick={() => navigate('/settings')}
-            title="AI Settings"
-            className={`hidden sm:flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-md border transition-colors ${
-              isConfigured()
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20'
-                : 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${isConfigured() ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-            {isConfigured() ? 'AI Ready' : 'AI: Setup'}
-          </button>
-
           {/* Live time */}
           <div className="hidden md:block font-mono text-xs px-2 py-1 rounded-md"
             style={{ background: 'var(--app-surface-soft)', color: 'var(--app-text-muted)', border: '1px solid var(--app-border)', letterSpacing: '0.04em' }}>
@@ -431,23 +407,9 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
             )}
           </button>
 
-          {/* AI Advisory — wider purple action button */}
-          <button
-            onClick={() => { setShowAdvisory(!showAdvisory); setShowAlerts(false); }}
-            className={`app-advisory-btn ${showAdvisory ? 'active' : ''}`}
-            title="AI Advisory"
-            aria-label="AI Advisory"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-            <span>AI Advisory</span>
-          </button>
-
           {/* Alerts bell */}
           <button
-            onClick={() => { setShowAlerts(!showAlerts); setShowAdvisory(false); }}
+            onClick={() => { setShowAlerts(!showAlerts); }}
             className={`icon-btn ${showAlerts ? 'active' : ''}`}
             title="Alerts"
             aria-label="Alerts"
@@ -498,7 +460,7 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
                   </div>
                 </div>
                 <div className="profile-menu-section">
-                  <button className="profile-menu-item" role="menuitem" onClick={() => { setShowProfile(false); setShowAlerts(true); setShowAdvisory(false); }}>
+                  <button className="profile-menu-item" role="menuitem" onClick={() => { setShowProfile(false); setShowAlerts(true); }}>
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
                     Notifications
                   </button>
@@ -544,13 +506,6 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
         </div>
       )}
 
-      {/* AI Advisory panel — rendered outside flex flow, true fixed overlay */}
-      {showAdvisory && (
-        <div className="app-advisory-panel w-96 overflow-hidden animate-slide-up border-2 border-app-border"
-          style={{ position: 'fixed', top: 'var(--app-header-h, 62px)', right: 0, bottom: 0, zIndex: 200 }}>
-          <AdvisoryPanel advisories={advisories} onClose={() => setShowAdvisory(false)} />
-        </div>
-      )}
     </div>
   );
 }
