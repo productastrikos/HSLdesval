@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useData } from '../services/socket';
-import AlertPanel from './AlertPanel';
 
 /* ─── Navigation structure ─────────────────────────────── */
 // roles: which roles can see this nav item
@@ -104,8 +102,6 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
   const userRole = user?.role || 'user';
   const navigate  = useNavigate();
   const location  = useLocation();
-  const { alerts } = useData();
-  const [showAlerts,   setShowAlerts]   = useState(false);
   const [showProfile,  setShowProfile]  = useState(false);
   const [time,         setTime]         = useState(new Date());
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
@@ -182,8 +178,6 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
     };
   }, [showProfile]);
 
-  const unacknowledgedAlerts = alerts?.filter(a => !a.acknowledged)?.length || 0;
-  const criticalAlerts       = alerts?.filter(a => a.type === 'critical' && !a.acknowledged)?.length || 0;
   const pageTitle            = PAGE_TITLES[location.pathname] || 'Dashboard';
 
   return (
@@ -407,30 +401,6 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
             )}
           </button>
 
-          {/* Alerts bell */}
-          <button
-            onClick={() => { setShowAlerts(!showAlerts); }}
-            className={`icon-btn ${showAlerts ? 'active' : ''}`}
-            title="Alerts"
-            aria-label="Alerts"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            {unacknowledgedAlerts > 0 && (
-              <span
-                className={`absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full text-[9px] flex items-center justify-center font-bold px-0.5 ${criticalAlerts > 0 ? 'animate-pulse' : ''}`}
-                style={{
-                  background: criticalAlerts > 0 ? 'var(--app-danger)' : 'var(--app-warning)',
-                  color: 'var(--app-on-color)',
-                }}
-              >
-                {unacknowledgedAlerts}
-              </span>
-            )}
-          </button>
-
           {/* User avatar — icon only with dropdown menu */}
           <div className="relative" ref={profileRef}>
             <button
@@ -460,10 +430,6 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
                   </div>
                 </div>
                 <div className="profile-menu-section">
-                  <button className="profile-menu-item" role="menuitem" onClick={() => { setShowProfile(false); setShowAlerts(true); }}>
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-                    Notifications
-                  </button>
                   <button className="profile-menu-item" role="menuitem" onClick={() => { setShowProfile(false); onThemeToggle && onThemeToggle(); }}>
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                     Toggle Theme
@@ -497,14 +463,6 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
           </main>
         </div>
       </div>
-
-      {/* Alert panel — rendered outside flex flow, true fixed overlay */}
-      {showAlerts && (
-        <div className="w-80 overflow-hidden animate-slide-up border-l border-app-border bg-app-darker"
-          style={{ position: 'fixed', top: 'var(--app-header-h, 62px)', right: 0, bottom: 0, zIndex: 200 }}>
-          <AlertPanel alerts={alerts} onClose={() => setShowAlerts(false)} />
-        </div>
-      )}
 
     </div>
   );
