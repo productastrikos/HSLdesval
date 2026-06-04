@@ -30,6 +30,56 @@ function getGeminiModel(systemInstruction) {
   return genAI.getGenerativeModel(opts);
 }
 
+// ── Shared file text extractor ────────────────────────────────────────────────
+// Supports: PDF (text + scanned/image fallback via Gemini), DOCX, images, plain text.
+const IMAGE_MIMES = new Set(['image/png','image/jpeg','image/jpg','image/gif','image/webp','image/bmp','image/tiff']);
+
+async function extractFileText(buffer, mime, origName) {
+  const isPDF  = mime === 'application/pdf'  || /\.pdf$/i.test(origName);
+  const isDOCX = mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || /\.docx$/i.test(origName);
+  const isImg  = IMAGE_MIMES.has(mime) || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(origName);
+
+  if (isPDF) {
+    let text = '';
+    try {
+      const pdfParse = require('pdf-parse');
+      const data = await pdfParse(buffer);
+      text = (data.text || '').trim();
+    } catch (_) {}
+
+    // Scanned / image-only PDF — fall back to Gemini vision
+    if (text.length < 200) {
+      const base64 = buffer.toString('base64');
+      const model  = getGeminiModel();
+      const result = await model.generateContent([
+        { inlineData: { mimeType: 'application/pdf', data: base64 } },
+        'Extract ALL text from this document exactly as it appears, including text inside images, figures, tables, and diagrams. Preserve structure using line breaks. Output only the extracted text — no commentary.',
+      ]);
+      text = result.response.text();
+    }
+    return text;
+  }
+
+  if (isDOCX) {
+    const mammoth = require('mammoth');
+    const result  = await mammoth.extractRawText({ buffer });
+    return result.value || '';
+  }
+
+  if (isImg) {
+    const imgMime = IMAGE_MIMES.has(mime) ? mime : 'image/jpeg';
+    const base64  = buffer.toString('base64');
+    const model   = getGeminiModel();
+    const result  = await model.generateContent([
+      { inlineData: { mimeType: imgMime, data: base64 } },
+      'Extract all visible text from this image exactly as it appears. Preserve layout using line breaks. Output only the extracted text with no commentary.',
+    ]);
+    return result.response.text();
+  }
+
+  return buffer.toString('utf8');
+}
+
 const app    = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
 
@@ -46,7 +96,11 @@ rag.initializeKnowledgeBase()
 
 
 // ── System prompt builder ─────────────────────────────────────────────────────
-function buildSystemPrompt(context, domain, mode) {
+function buildSystemPrompt(context, domain, mode, chatDocText, chatDocName) {
+  const docBlock = chatDocText
+    ? `\n\nUSER-UPLOADED REFERENCE DOCUMENT — "${chatDocName || 'Uploaded Document'}":\nThe user has provided this document as reference context. Prioritise its content when answering:\n\n${chatDocText.slice(0, 8000)}\n\n--- END OF REFERENCE DOCUMENT ---`
+    : '';
+
   const contextBlock = context.length > 0
     ? '\n\nRETRIEVED KNOWLEDGE BASE CONTEXT (ground your answer in these):\n\n' +
       context.map((c, i) => {
@@ -72,7 +126,7 @@ Always:
 - Flag safety-critical findings prominently
 
 Current domain focus: ${domain || 'All domains'}
-Mode: ${mode || 'general'}${contextBlock}`;
+Mode: ${mode || 'general'}${docBlock}${contextBlock}`;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -188,7 +242,7 @@ app.delete('/api/auth/users/:id', authenticate, requireAdmin, (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/chat', authenticate, async (req, res) => {
   try {
-    const { messages = [], domain } = req.body;
+    const { messages = [], domain, chatDocText, chatDocName } = req.body;
 
     // Build retrieval query from up to last 3 user turns for broader context
     const userTurns  = messages.filter(m => m.role === 'user');
@@ -206,7 +260,7 @@ app.post('/api/chat', authenticate, async (req, res) => {
     const allMessages = messages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (!allMessages.length) return res.status(400).json({ error: 'No messages provided' });
 
-    const model = getGeminiModel(buildSystemPrompt(context, domain, 'chat'));
+    const model = getGeminiModel(buildSystemPrompt(context, domain, 'chat', chatDocText, chatDocName));
 
     // Convert prior turns into Gemini history (all but the last user message)
     const history = allMessages.slice(0, -1).map(m => ({
@@ -369,39 +423,12 @@ app.post('/api/upload', authenticate, upload.single('file'), async (req, res) =>
     }
 
     const name = docName || req.file.originalname;
-    let text   = '';
     const mime = req.file.mimetype;
 
-    // Reject image files — no OCR engine available server-side
-    const IMAGE_TYPES = new Set(['image/png','image/jpeg','image/jpg','image/tiff','image/tif','image/gif','image/webp','image/bmp']);
-    if (IMAGE_TYPES.has(mime) || /\.(png|jpe?g|tiff?|gif|webp|bmp)$/i.test(req.file.originalname)) {
-      return res.status(422).json({
-        error: 'Image files have no text layer and cannot be indexed directly. Use the "Convert PDF → Editable" tool to extract text first, then upload the resulting file.',
-      });
-    }
-
-    if (mime === 'application/pdf' || req.file.originalname.endsWith('.pdf')) {
-      try {
-        const pdfParse = require('pdf-parse');
-        const data = await pdfParse(req.file.buffer);
-        text = data.text || '';
-      } catch (e) {
-        console.warn('[upload] pdf-parse failed:', e.message);
-        text = `[PDF content — text extraction failed: ${e.message}]`;
-      }
-    } else if (
-      mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      req.file.originalname.endsWith('.docx')
-    ) {
-      const mammoth = require('mammoth');
-      const result  = await mammoth.extractRawText({ buffer: req.file.buffer });
-      text = result.value || '';
-    } else {
-      text = req.file.buffer.toString('utf8');
-    }
+    const text = await extractFileText(req.file.buffer, mime, req.file.originalname);
 
     if (!text.trim()) {
-      return res.status(422).json({ error: 'Could not extract text from file. Try a text-based PDF or DOCX.' });
+      return res.status(422).json({ error: 'Could not extract text from file.' });
     }
 
     const docId       = 'DOC-' + Date.now();
@@ -446,36 +473,10 @@ app.post('/api/convert', authenticate, upload.single('file'), async (req, res) =
     const baseName = origName.replace(/\.[^/.]+$/, '');
 
     // ── Extract text ─────────────────────────────────────────────────────────
-    let text = '';
-    const IMAGE_MIME = new Set(['image/png','image/jpeg','image/jpg','image/gif','image/webp','image/bmp']);
-
-    if (mime === 'application/pdf' || origName.endsWith('.pdf')) {
-      const pdfParse = require('pdf-parse');
-      const data     = await pdfParse(req.file.buffer);
-      text = data.text || '';
-    } else if (
-      mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      origName.endsWith('.docx')
-    ) {
-      const mammoth = require('mammoth');
-      const result  = await mammoth.extractRawText({ buffer: req.file.buffer });
-      text = result.value || '';
-    } else if (IMAGE_MIME.has(mime) || /\.(png|jpe?g|gif|webp|bmp)$/i.test(origName)) {
-      // Use Gemini vision to OCR the image
-      const imgMime  = IMAGE_MIME.has(mime) ? mime : 'image/jpeg';
-      const base64   = req.file.buffer.toString('base64');
-      const model    = getGeminiModel();
-      const result   = await model.generateContent([
-        { inlineData: { mimeType: imgMime, data: base64 } },
-        'Extract all visible text from this image exactly as it appears. Preserve layout structure using line breaks and spacing. Output only the extracted text with no commentary or explanation.',
-      ]);
-      text = result.response.text();
-    } else {
-      text = req.file.buffer.toString('utf8');
-    }
+    const text = await extractFileText(req.file.buffer, mime, origName);
 
     if (!text.trim()) {
-      return res.status(422).json({ error: 'Could not extract text from file. Ensure the PDF has a text layer or the image contains readable text.' });
+      return res.status(422).json({ error: 'Could not extract text from file.' });
     }
 
     // ── Produce output ───────────────────────────────────────────────────────
@@ -541,6 +542,84 @@ app.get('/api/kb-status', authenticate, (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 app.get('/api/documents', authenticate, (req, res) => {
   res.json(rag.getAllDocs());
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE DOCUMENT  DELETE /api/documents/:id
+// Admins can delete any non-system doc. Users can delete only their own.
+// ─────────────────────────────────────────────────────────────────────────────
+app.delete('/api/documents/:id', authenticate, (req, res) => {
+  try {
+    const { id } = req.params;
+    const all = rag.getAllDocs();
+    const doc = all.find(d => d.id === id);
+
+    if (!doc) return res.status(404).json({ error: 'Document not found.' });
+    if (doc.uploadedBy === 'system') {
+      return res.status(403).json({ error: 'System knowledge-base documents cannot be deleted.' });
+    }
+    if (req.user.role !== 'admin' && doc.uploadedBy !== req.user.username) {
+      return res.status(403).json({ error: 'You can only delete documents you uploaded.' });
+    }
+
+    rag.removeDocument(id);
+    res.json({ success: true, id });
+  } catch (err) {
+    console.error('[DELETE /api/documents/:id]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHAT DOCUMENT EXTRACT  POST /api/chat-extract
+// Extracts text from a file and generates AI suggestions for the chatbot.
+// Does NOT index the document into the RAG — chatbot-only ephemeral context.
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/chat-extract', authenticate, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+
+    const origName = req.file.originalname;
+    const mime     = req.file.mimetype;
+
+    const text = await extractFileText(req.file.buffer, mime, origName);
+
+    if (!text.trim()) {
+      return res.status(422).json({ error: 'Could not extract text from file.' });
+    }
+
+    // Generate document-specific suggestions using Gemini
+    const docSample = text.slice(0, 6000);
+    const suggestionsPrompt = `Based on the following document content, generate exactly 6 specific and relevant questions or instructions that an engineer would want to ask about this document. Each prompt must be specific to the actual content of this document — not generic.
+
+Document content:
+${docSample}
+
+Return ONLY a JSON array of 6 strings — no other text, no numbering, no bullet points, no icons or symbols at the start. Each string is a complete, specific question or instruction directly relevant to this document's content.
+
+Example format: ["Specific question about document content 1", "Specific question about document content 2"]`;
+
+    const model    = getGeminiModel();
+    const result   = await model.generateContent(suggestionsPrompt);
+    const rawText  = result.response.text();
+
+    let suggestions = [];
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      try { suggestions = JSON.parse(jsonMatch[0]); } catch (_) {}
+    }
+    suggestions = (suggestions || []).filter(s => typeof s === 'string').slice(0, 6);
+
+    res.json({
+      docName:    origName,
+      textLength: text.length,
+      text:       text.slice(0, 50000),
+      suggestions,
+    });
+  } catch (err) {
+    console.error('[/api/chat-extract]', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

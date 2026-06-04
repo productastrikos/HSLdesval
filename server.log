@@ -1,0 +1,29 @@
+◇ injected env (3) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+[Embedder] Loaded 6140 cached vectors from disk
+[HSL Validator API] http://localhost:5001
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 32
+[Embedder] Loading semantic model (Xenova/all-MiniLM-L6-v2, downloads ~22 MB on first run)…
+[Embedder] Semantic embedding model ready
+[RAG] "Build Specification — Input File" → 98 chunks
+[RAG] "Life-Saving Appliances & LSA Code 2010" → 311 chunks
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 3
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 3
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 3
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 3
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 3
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 32
+Warning: TT: undefined function: 3
+[RAG] "Main Classification Rules — July 2024 Edition" → 5147 chunks
+[RAG] "SOLAS Consolidated Edition 2020" → 505 chunks
+[RAG] Ready — 4 docs | 6061 chunks | 6061 vectors | 6061 BM25 docs

@@ -54,7 +54,7 @@ export default function Dashboard() {
           desc="Upload, OCR-extract, compare and convert scanned PDFs to Word/Excel/ODF."
           icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
         />
-        <QuickTile to="/validator" accent="bg-violet-500/15 text-violet-400" title="Rule Validator"
+        <QuickTile to="/documents" accent="bg-violet-500/15 text-violet-400" title="Rule Validator"
           desc="Cross-reference Build Specs against IRS/DNV/ABS/IACS, IMO and IEC."
           icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>}
         />
@@ -72,14 +72,14 @@ export default function Dashboard() {
         </div>
         <div className="p-2 space-y-1.5 max-h-72 overflow-y-auto">
           {activeFindings.length === 0 && (
-            <div className="text-[11px] text-slate-500 text-center py-6">All findings resolved.</div>
+            <div className="text-[11px] text-slate-500 text-center py-6">No active findings. Run a validation scan in Document Intelligence to check compliance.</div>
           )}
           {activeFindings.map(a => {
             const dot = a.type === 'critical' ? 'bg-red-500' : a.type === 'warning' ? 'bg-amber-500' : 'bg-sky-500';
             return (
               <button
                 key={a.alertId}
-                onClick={() => navigate('/validator')}
+                onClick={() => navigate('/documents')}
                 className="w-full text-left p-2 rounded hover:bg-white/[0.03] border border-transparent hover:border-white/[0.06] transition-colors"
               >
                 <div className="flex items-start gap-2">

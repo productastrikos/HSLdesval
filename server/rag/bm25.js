@@ -73,6 +73,20 @@ class BM25 {
 
   get size() { return this.documents.length; }
 
+  remove(ids) {
+    const idSet = new Set(ids);
+    this.documents = this.documents.filter(d => !idSet.has(d.id));
+    this.df.clear();
+    for (const doc of this.documents) {
+      const seen = new Set();
+      for (const t of doc.tokens) {
+        if (!seen.has(t)) { this.df.set(t, (this.df.get(t) || 0) + 1); seen.add(t); }
+      }
+    }
+    const total = this.documents.reduce((s, d) => s + d.length, 0);
+    this.avgdl = this.documents.length ? total / this.documents.length : 0;
+  }
+
   clear() {
     this.documents = [];
     this.df.clear();

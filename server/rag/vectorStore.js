@@ -35,6 +35,11 @@ class VectorStore {
     return this._items.find(x => x.id === id)?.vec ?? null;
   }
 
+  remove(ids) {
+    const idSet = new Set(ids);
+    this._items = this._items.filter(x => !idSet.has(x.id));
+  }
+
   get size() { return this._items.length; }
 
   clear() { this._items = []; }

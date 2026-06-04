@@ -49,8 +49,14 @@ async function post(path, body) {
 
 // ── API methods ───────────────────────────────────────────────────────────────
 
-export async function chat(messages, domain) {
-  return post('/chat', { messages, domain });
+export async function chat(messages, domain, chatDocText, chatDocName) {
+  return post('/chat', { messages, domain, chatDocText, chatDocName });
+}
+
+export async function extractChatDoc(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return apiFetch('/chat-extract', { method: 'POST', body: form });
 }
 
 export async function validate(specId, domain, additionalContext) {
@@ -79,6 +85,10 @@ export async function getKbStatus() {
 
 export async function listDocuments() {
   return apiFetch('/documents');
+}
+
+export async function deleteDocument(id) {
+  return apiFetch(`/documents/${id}`, { method: 'DELETE' });
 }
 
 export async function testConnection() {

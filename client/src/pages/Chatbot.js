@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { chat, isConfigured } from '../services/aiService';
-import { generateResponse, SUGGESTIONS, RULE_CORPUS, DOMAINS } from '../services/hslKnowledge';
+import { chat, extractChatDoc, isConfigured } from '../services/aiService';
+import { generateResponse, RULE_CORPUS, DOMAINS } from '../services/hslKnowledge';
 
 // ── Session persistence ───────────────────────────────────────────────────────
 const SESSIONS_KEY = 'hsl_chat_sessions';
@@ -154,11 +154,15 @@ export default function Chatbot() {
   const contextDomain  = activeSession?.domain   || 'All';
 
   // ── UI state ──────────────────────────────────────────────────────────────
-  const [input,      setInput]      = useState('');
-  const [isThinking, setIsThinking] = useState(false);
-  const [, setError]                = useState(null);
-  const endRef   = useRef(null);
-  const navigate = useNavigate();
+  const [input,        setInput]        = useState('');
+  const [isThinking,   setIsThinking]   = useState(false);
+  const [, setError]                    = useState(null);
+  const [chatDoc,      setChatDoc]      = useState(null);
+  const [docUploading, setDocUploading] = useState(false);
+  const [docError,     setDocError]     = useState(null);
+  const endRef      = useRef(null);
+  const docFileRef  = useRef(null);
+  const navigate    = useNavigate();
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -214,6 +218,22 @@ export default function Chatbot() {
     });
   };
 
+  // ── Document upload for chat reference ───────────────────────────────────
+  const handleDocUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setDocUploading(true);
+    setDocError(null);
+    try {
+      const result = await extractChatDoc(file);
+      setChatDoc({ name: result.docName, text: result.text, suggestions: result.suggestions || [] });
+    } catch (err) {
+      setDocError(err.message);
+    }
+    setDocUploading(false);
+  };
+
   // ── Send message ──────────────────────────────────────────────────────────
   const send = async (text) => {
     const q = (text ?? input).trim();
@@ -257,7 +277,7 @@ export default function Chatbot() {
           .filter(m => !m.isWelcome)
           .map(m => ({ role: m.role, content: m.content }));
 
-        const resp = await chat(history, domain === 'All' ? undefined : domain);
+        const resp = await chat(history, domain === 'All' ? undefined : domain, chatDoc?.text, chatDoc?.name);
 
         appendToSession(sessionId, {
           id:          'a' + Date.now(),
@@ -478,23 +498,83 @@ export default function Chatbot() {
 
       {/* ── Right sidebar ────────────────────────────────────────────────── */}
       <aside className="w-72 shrink-0 flex flex-col gap-3 overflow-y-auto">
+
+        {/* Reference document upload */}
         <div className="bg-app-panel border border-app-border rounded-xl p-3">
-          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Suggested prompts</div>
-          <div className="space-y-1.5">
-            {SUGGESTIONS.map((s, i) => (
+          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Reference Document</div>
+          <input ref={docFileRef} type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.gif,.webp,.bmp" className="hidden" onChange={handleDocUpload} />
+          {chatDoc ? (
+            <div>
+              <div className="flex items-start gap-2 bg-emerald-500/[0.06] border border-emerald-500/30 rounded-lg p-2 mb-2">
+                <svg className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-semibold text-emerald-300 truncate">{chatDoc.name}</div>
+                  <div className="text-[10px] text-slate-500">{Math.ceil(chatDoc.text.length / 1000)}K chars · active as context</div>
+                </div>
+                <button
+                  onClick={() => { setChatDoc(null); setDocError(null); }}
+                  className="shrink-0 text-slate-500 hover:text-red-400 transition-colors"
+                  title="Remove document"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
               <button
-                key={i}
-                onClick={() => send(s.text)}
-                disabled={isThinking}
-                className="w-full text-left text-[11px] px-2.5 py-2 rounded-lg bg-white/[0.02] border border-app-border hover:bg-sky-500/[0.06] hover:border-sky-500/30 hover:text-sky-200 text-slate-300 transition-colors flex items-start gap-2 disabled:opacity-40"
+                onClick={() => docFileRef.current?.click()}
+                disabled={docUploading}
+                className="w-full text-[10px] text-slate-500 hover:text-sky-400 transition-colors py-1 text-center"
               >
-                <span className="shrink-0">{s.icon}</span>
-                <span className="leading-snug">{s.text}</span>
+                Replace document
               </button>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div>
+              <button
+                onClick={() => docFileRef.current?.click()}
+                disabled={docUploading}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors disabled:opacity-50"
+              >
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                {docUploading ? 'Processing document…' : 'Upload reference document'}
+              </button>
+              {docError && (
+                <div className="mt-1.5 text-[10px] text-red-400 leading-snug">{docError}</div>
+              )}
+              <p className="text-[10px] text-slate-600 mt-1.5 leading-relaxed">Upload a PDF, DOCX, or image. The document text becomes active context for this conversation and generates relevant prompt suggestions.</p>
+            </div>
+          )}
         </div>
 
+        {/* Suggested prompts — dynamic from uploaded doc */}
+        <div className="bg-app-panel border border-app-border rounded-xl p-3">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Suggested prompts</div>
+          {chatDoc?.suggestions?.length > 0 ? (
+            <div className="space-y-1.5">
+              {chatDoc.suggestions.map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => send(s)}
+                  disabled={isThinking}
+                  className="w-full text-left text-[11px] px-2.5 py-2 rounded-lg bg-white/[0.02] border border-app-border hover:bg-sky-500/[0.06] hover:border-sky-500/30 hover:text-sky-200 text-slate-300 transition-colors disabled:opacity-40"
+                >
+                  <span className="leading-snug">{s}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[10px] text-slate-600 leading-relaxed">
+              Upload a reference document above to see document-specific prompt suggestions.
+            </div>
+          )}
+        </div>
+
+        {/* Quick reference rules */}
         <div className="bg-app-panel border border-app-border rounded-xl p-3">
           <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Quick reference</div>
           <div className="space-y-1.5 text-[10px]">

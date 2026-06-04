@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { INDEXED_DOCS, compareDocs, BUILD_SPECS, RULE_CORPUS, SPEC_RULE_MAP } from '../services/hslKnowledge';
-import { uploadDocument, compareByIds, listDocuments, validate, isConfigured } from '../services/aiService';
+import { compareDocs } from '../services/hslKnowledge';
+import { uploadDocument, compareByIds, listDocuments, validate, isConfigured, deleteDocument } from '../services/aiService';
 import { useAuth } from '../context/AuthContext';
 
 // ── Document type styles ──────────────────────────────────────────────────────
@@ -26,31 +26,8 @@ const USER_DOC_TYPES   = UPLOAD_DOC_TYPES;
 const COMPLIANCE_TYPES = new Set(['Class Rule', 'IACS', 'IMO', 'IEC', 'Naval', 'Build Spec']);
 
 // ── Validator helpers ─────────────────────────────────────────────────────────
-function staticFindingsFor(spec) {
-  const domain = spec?.domain || 'Hull';
-  const byDomain = {
-    Hull: [
-      { ruleId:'IRS-P3-C6-S4', section:'§4.2 Bulkhead Spacing',       finding:'Bulkhead at Fr84 exceeds 30-frame max spacing per IRS Pt.3 Ch.6 Sec.4',               severity:'critical', status:'open',      impact:-8 },
-      { ruleId:'IRS-P3-C6-S2', section:'§5.1 Plate Thickness Fr112', finding:'12.5 mm specified; IRS 2024 amendment requires 13.0 mm below waterline',                severity:'high',     status:'open',      impact:-5 },
-      { ruleId:'IACS-UR-S6',   section:'§7.2 Material Grade S2',     finding:'Grade A used in strength-deck stringer plate amidships; IACS UR S6 requires D or E',   severity:'medium',   status:'in-review', impact:-3 },
-    ],
-    Electrical: [
-      { ruleId:'IEC-60092-352', section:'§11.1 Cable Tray Segregation', finding:'Power/instrumentation cables in tray T-E-204 have 80 mm gap; 100 mm required by IEC 60092-352', severity:'high', status:'open', impact:-4 },
-    ],
-    HVAC: [
-      { ruleId:'DNV-P4-C7-S2', section:'§3.4 HVAC Redundancy', finding:'Supply fan SF-1 has no N+1 backup; DNV Pt.4 Ch.7 Sec.2 requires redundancy for machinery spaces', severity:'medium', status:'in-review', impact:-3 },
-    ],
-    Piping: [
-      { ruleId:'IMO-MARPOL-A1-R14', section:'§2.3 Bilge OWS Interlock', finding:'Oil-content-meter interlock not wired to bilge pump stop; mandatory per MARPOL Annex I Reg.14', severity:'high', status:'open', impact:-4 },
-    ],
-    Mechanical: [
-      { ruleId:'ABS-P4-C2', section:'§6.1 Propulsion Shaft Schedule', finding:'Intermediate shaft diameter under-sized by 3 mm vs ABS Pt.4 Ch.2 formula', severity:'medium', status:'resolved', impact:0 },
-    ],
-    Outfit: [
-      { ruleId:'IRS-NAVAL-V2', section:'§9.7 Combat System Mounts', finding:'Shock isolator type unspecified for Grade A mounts; NSQR Vol-II requires vendor certification', severity:'critical', status:'open', impact:-7 },
-    ],
-  };
-  return byDomain[domain] || [];
+function staticFindingsFor() {
+  return [];
 }
 
 const SEV_STYLE = {
@@ -439,17 +416,29 @@ export default function Documents() {
   const [activeTab, setActiveTab] = useState('documents');
 
   // ─ Documents state ──────────────────────────────────────────────────────────
-  const [docs,        setDocs]        = useState(INDEXED_DOCS);
+  const [docs,        setDocs]        = useState([]);
   const [backendDocs, setBackendDocs] = useState([]);
   const [docFilter,   setDocFilter]   = useState('All');
   const [query,       setQuery]       = useState('');
+  const [deletingId,  setDeletingId]  = useState(null);
 
   const refreshBackendDocs = useCallback(async () => {
-    if (!aiMode) return;
     try { const bd = await listDocuments(); setBackendDocs(bd); } catch (_) {}
-  }, [aiMode]);
+  }, []);
 
   useEffect(() => { refreshBackendDocs(); }, [refreshBackendDocs]);
+
+  const handleDelete = useCallback(async (doc) => {
+    if (!window.confirm(`Delete "${doc.name}"?\n\nThis will remove it from the knowledge base and it cannot be undone.`)) return;
+    setDeletingId(doc.id);
+    try {
+      await deleteDocument(doc.id);
+      await refreshBackendDocs();
+    } catch (err) {
+      window.alert(`Delete failed: ${err.message}`);
+    }
+    setDeletingId(null);
+  }, [refreshBackendDocs]);
 
   const displayDocs = aiMode ? backendDocs.filter(d => d.uploadedBy !== 'system') : docs;
   const types       = ['All', ...Array.from(new Set(displayDocs.map(d => d.type)))];
@@ -470,16 +459,22 @@ export default function Documents() {
   const allDocsForCompare = useMemo(() => backendDocs.map(d => ({ id: d.id, name: d.name })), [backendDocs]);
 
   // ─ Validator state ──────────────────────────────────────────────────────────
-  const [selectedSpec, setSelectedSpec] = useState(BUILD_SPECS[0].id);
+  const [selectedSpec, setSelectedSpec] = useState('');
   const [valFilter,    setValFilter]    = useState('all');
   const [running,      setRunning]      = useState(false);
   const [scanLog,      setScanLog]      = useState([]);
   const [aiFindings,   setAiFindings]   = useState(null);
   const [aiError,      setAiError]      = useState(null);
 
-  const spec    = BUILD_SPECS.find(s => s.id === selectedSpec);
-  const ruleIds = SPEC_RULE_MAP[selectedSpec] || [];
-  const rules   = RULE_CORPUS.filter(r => ruleIds.includes(r.id));
+  const validatorDocs = useMemo(() => backendDocs.filter(d => d.uploadedBy !== 'system'), [backendDocs]);
+
+  useEffect(() => {
+    if (validatorDocs.length > 0 && !validatorDocs.find(d => d.id === selectedSpec)) {
+      setSelectedSpec(validatorDocs[0].id);
+    }
+  }, [validatorDocs, selectedSpec]);
+
+  const spec = validatorDocs.find(s => s.id === selectedSpec);
 
   const findings = useMemo(() => {
     if (aiFindings !== null) return aiFindings;
@@ -509,21 +504,22 @@ export default function Documents() {
     setAiFindings(null);
     setAiError(null);
 
+    const docPages = spec?.pages || spec?.chunkCount || 200;
     const steps = aiMode ? [
-      `Loading Build Spec ${selectedSpec}…`,
-      `Domain: ${spec?.domain} — retrieving applicable rules from KB…`,
-      `Running TF-IDF retrieval across ${spec?.pages || 200} pages…`,
+      `Loading document: ${spec?.name || selectedSpec}…`,
+      `Domain: ${spec?.type || 'General'} — retrieving applicable rules from KB…`,
+      `Running TF-IDF retrieval across ${docPages} pages…`,
       `Cross-referencing IRS / DNV / ABS / IACS clauses…`,
       `Checking IMO MARPOL & SOLAS applicability…`,
       `Verifying IEC 60092 series electrical clauses…`,
-      `Sending to Claude for compliance analysis…`,
+      `Sending to Gemini for compliance analysis…`,
       `Detecting inconsistencies and repetitive statements…`,
       `Computing compliance score…`,
       `Scan complete · AI findings ready`,
     ] : [
-      `Loading Build Spec ${selectedSpec}…`,
-      `Tokenising ${spec?.pages || 200} pages…`,
-      `Retrieving applicable rule corpus (${rules.length} rules)…`,
+      `Loading document: ${spec?.name || selectedSpec}…`,
+      `Tokenising ${docPages} pages…`,
+      `Retrieving applicable rule corpus from KB…`,
       `Cross-referencing IRS / DNV / ABS / IACS clauses…`,
       `Checking IMO MARPOL & SOLAS applicability…`,
       `Verifying IEC 60092 series electrical clauses…`,
@@ -536,7 +532,7 @@ export default function Documents() {
 
     if (aiMode) {
       try {
-        const result = await validate(selectedSpec, spec?.domain, `Build Spec: ${spec?.title}`);
+        const result = await validate(selectedSpec, spec?.type, `Document: ${spec?.name}`);
         if (result.findings && result.findings.length > 0) {
           setAiFindings(result.findings);
         } else {
@@ -666,6 +662,7 @@ export default function Documents() {
                         {isAdmin && <th className="text-left px-3 py-2 font-bold">Uploaded By</th>}
                         <th className="text-center px-3 py-2 font-bold">OCR</th>
                         <th className="text-right px-3 py-2 font-bold">Confidence</th>
+                        <th className="px-3 py-2"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/[0.04]">
@@ -707,11 +704,27 @@ export default function Documents() {
                               {d.confidence ? `${(d.confidence || 0).toFixed(1)}%` : '—'}
                             </span>
                           </td>
+                          <td className="px-3 py-2 text-right">
+                            {(isAdmin || d.uploadedBy === user?.username) && d.uploadedBy !== 'system' && (
+                              <button
+                                onClick={() => handleDelete(d)}
+                                disabled={deletingId === d.id}
+                                title="Delete document"
+                                className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                              >
+                                {deletingId === d.id ? (
+                                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                ) : (
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                )}
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                       {filtered.length === 0 && (
                         <tr>
-                          <td colSpan={isAdmin ? 6 : 5} className="px-3 py-8 text-center text-slate-500 text-[11px]">
+                          <td colSpan={isAdmin ? 7 : 6} className="px-3 py-8 text-center text-slate-500 text-[11px]">
                             No documents match the current filter.
                           </td>
                         </tr>
@@ -758,16 +771,22 @@ export default function Documents() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div className="bg-app-panel border border-app-border rounded-xl p-4 lg:col-span-2">
               <div className="flex items-center gap-3 mb-3">
-                <select
-                  value={selectedSpec}
-                  onChange={e => { setSelectedSpec(e.target.value); setAiFindings(null); setScanLog([]); setAiError(null); }}
-                  className="flex-1 text-sm px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 font-mono font-bold"
-                >
-                  {BUILD_SPECS.map(s => <option key={s.id} value={s.id}>{s.id} Rev.{s.rev} — {s.title}</option>)}
-                </select>
+                {validatorDocs.length === 0 ? (
+                  <div className="flex-1 text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700">
+                    No documents uploaded yet. Upload a document in the Documents tab to validate it.
+                  </div>
+                ) : (
+                  <select
+                    value={selectedSpec}
+                    onChange={e => { setSelectedSpec(e.target.value); setAiFindings(null); setScanLog([]); setAiError(null); }}
+                    className="flex-1 text-sm px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 font-mono font-bold"
+                  >
+                    {validatorDocs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                )}
                 <button
                   onClick={runScan}
-                  disabled={running}
+                  disabled={running || !selectedSpec}
                   className="px-3 py-2 rounded-lg bg-gradient-to-r from-sky-500 to-violet-500 text-white text-xs font-semibold disabled:opacity-50 hover:opacity-90 transition-opacity flex items-center gap-1.5"
                 >
                   {running ? (
@@ -782,10 +801,10 @@ export default function Documents() {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                 {[
-                  { label:'Domain',      value:spec?.domain },
-                  { label:'Pages',       value:spec?.pages },
-                  { label:'Last Update', value:spec?.lastUpdated },
-                  { label:'Findings',    value:findings.length, className:'text-amber-400' },
+                  { label:'Type',        value: spec?.type || '—' },
+                  { label:'Pages',       value: spec?.pages || spec?.chunkCount || '—' },
+                  { label:'Uploaded',    value: spec?.addedAt ? new Date(spec.addedAt).toLocaleDateString() : '—' },
+                  { label:'Findings',    value: findings.length, className:'text-amber-400' },
                 ].map(({ label, value, className }) => (
                   <div key={label} className="bg-slate-950/40 rounded-lg p-2 border border-slate-800">
                     <div className="text-[9px] uppercase tracking-widest text-slate-500">{label}</div>
@@ -857,7 +876,12 @@ export default function Documents() {
               </div>
               <div className="divide-y divide-white/[0.04]">
                 {visible.length === 0 ? (
-                  <div className="text-center text-slate-500 text-[11px] py-8">No findings match the current filter.</div>
+                  <div className="text-center text-slate-500 text-[11px] py-8">
+                    {aiFindings === null && scanLog.length === 0
+                      ? 'Run a validation scan to see compliance findings.'
+                      : 'No findings match the current filter.'
+                    }
+                  </div>
                 ) : visible.map((f, i) => {
                   const sev = SEV_STYLE[f.severity] || SEV_STYLE.low;
                   const st  = STATUS_STYLE[f.status] || STATUS_STYLE.open;
@@ -882,23 +906,6 @@ export default function Documents() {
               </div>
             </div>
 
-            <div className="bg-app-panel border border-app-border rounded-xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-app-border">
-                <h3 className="text-sm font-bold text-white">Applicable Rules</h3>
-                <p className="text-[10px] text-slate-500 mt-0.5">{rules.length} rule clauses cross-referenced for {spec?.domain}</p>
-              </div>
-              <div className="p-2 space-y-1.5 max-h-72 overflow-y-auto">
-                {rules.map(r => (
-                  <div key={r.id} className="p-2 rounded bg-slate-950/40 border border-app-border">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-[9px] font-bold bg-sky-500/15 text-sky-300 border border-sky-500/30 px-1.5 py-0.5 rounded uppercase tracking-widest">{r.society}</span>
-                      <span className="text-[10px] font-mono text-slate-500">{r.id}</span>
-                    </div>
-                    <div className="text-[11px] font-semibold text-slate-200">{r.title}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         </>
       )}

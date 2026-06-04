@@ -247,6 +247,16 @@ function getAllDocs() {
   }));
 }
 
+function removeDocument(docId) {
+  if (!docStore.has(docId)) return false;
+  const chunkIds = [...chunkStore.keys()].filter(k => k.startsWith(`${docId}~~`));
+  for (const cid of chunkIds) chunkStore.delete(cid);
+  bm25.remove(chunkIds);
+  vecStore.remove(chunkIds);
+  docStore.delete(docId);
+  return true;
+}
+
 function getStatus() {
   return {
     ready:          _kbReady,
@@ -313,6 +323,7 @@ async function initializeKnowledgeBase() {
 
 module.exports = {
   addDocument,
+  removeDocument,
   getDocText,
   retrieve,
   retrieveForDomain,
