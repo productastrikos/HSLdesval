@@ -152,7 +152,7 @@ function toCode(label) {
 }
 
 /* ═══════════════════════════════════════════════════════════ */
-export default function KPIDetailModal({ kpi, onClose, showAnalysis = true }) {
+export default function KPIDetailModal({ kpi, onClose }) {
   const [timeRange, setTimeRange]           = useState('24H');
   const [showPrediction, setShowPrediction] = useState(false);
   const isLight    = typeof document !== 'undefined' && document.body?.dataset?.theme === 'light';
@@ -311,7 +311,6 @@ export default function KPIDetailModal({ kpi, onClose, showAnalysis = true }) {
   }), [kpi, isLight]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const events   = useMemo(() => genEvents(kpi?.label, rag.label, kpi?.inverted), [kpi?.label, rag.label, kpi?.inverted]);
-  const analyses = useMemo(() => (kpi?.analysis || '').split('|').map(s => s.trim()).filter(s => s.length > 3), [kpi?.analysis]);
   const subs       = kpi?.subValues || [];
   const mainSubs   = subs.filter(m => !/target/i.test(m.label));
   const targetSubs = subs.filter(m => /target/i.test(m.label));

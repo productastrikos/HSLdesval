@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { SocketProvider } from './services/socket';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Chart as ChartJS } from 'chart.js';
 import Dashboard     from './pages/Dashboard';
 import Chatbot       from './pages/Chatbot';
 import Documents     from './pages/Documents';
@@ -13,10 +12,6 @@ import Settings      from './pages/Settings';
 import UserManagement from './pages/UserManagement';
 import Login         from './pages/Login';
 import Layout        from './components/Layout';
-
-ChartJS.defaults.interaction.mode = 'index';
-ChartJS.defaults.interaction.intersect = false;
-ChartJS.defaults.plugins.tooltip.enabled = true;
 
 // Guard that redirects non-admins back to dashboard
 function AdminRoute({ children }) {

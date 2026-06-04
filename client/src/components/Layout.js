@@ -161,7 +161,7 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
       return b.matchCount - a.matchCount;
     });
     return scored.slice(0, 10).map(({ item }) => item);
-  }, [searchQuery]);
+  }, [searchQuery, userRole]);
 
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);

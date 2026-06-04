@@ -150,7 +150,7 @@ export default function Chatbot() {
   }, [sessions, activeId]);
 
   const activeSession  = useMemo(() => sessions.find(s => s.id === activeId) || sessions[0], [sessions, activeId]);
-  const messages       = activeSession?.messages || [];
+  const messages       = useMemo(() => activeSession?.messages || [], [activeSession]);
   const contextDomain  = activeSession?.domain   || 'All';
 
   // ── UI state ──────────────────────────────────────────────────────────────
