@@ -10,6 +10,13 @@ import Settings      from './pages/Settings';
 import UserManagement from './pages/UserManagement';
 import Login         from './pages/Login';
 import Layout        from './components/Layout';
+import DrawingExtract    from './pages/DrawingExtract';
+import InspectionReports from './pages/InspectionReports';
+import LessonsLearned    from './pages/LessonsLearned';
+import TechnicalOffer    from './pages/TechnicalOffer';
+import BindingData       from './pages/BindingData';
+import PreBidQueries     from './pages/PreBidQueries';
+import DesignReview      from './pages/DesignReview';
 
 // Guard that redirects non-admins back to dashboard
 function AdminRoute({ children }) {
@@ -56,10 +63,17 @@ function AppRoutes() {
     <Layout user={user} onLogout={logout} theme={theme} onThemeToggle={handleThemeToggle}>
       <Routes>
         {/* Shared routes (both roles) */}
-        <Route path="/"           element={<Dashboard />} />
-        <Route path="/chatbot"    element={<Chatbot />} />
-        <Route path="/documents"  element={<Documents />} />
-        <Route path="/visualizer" element={<Visualizer3D />} />
+        <Route path="/"              element={<Dashboard />} />
+        <Route path="/chatbot"       element={<Chatbot />} />
+        <Route path="/documents"     element={<Documents />} />
+        <Route path="/drawings"      element={<DrawingExtract />} />
+        <Route path="/inspection"    element={<InspectionReports />} />
+        <Route path="/lessons"       element={<LessonsLearned />} />
+        <Route path="/compliance"    element={<TechnicalOffer />} />
+        <Route path="/binding"       element={<BindingData />} />
+        <Route path="/prebid"        element={<PreBidQueries />} />
+        <Route path="/design-review" element={<DesignReview />} />
+        <Route path="/visualizer"    element={<Visualizer3D />} />
 
         {/* Admin-only routes */}
         <Route path="/settings"       element={<AdminRoute><Settings /></AdminRoute>} />

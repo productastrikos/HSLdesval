@@ -11,7 +11,6 @@ const path    = require('path');
 const fs      = require('fs');
 const rag     = require('./rag');
 const bcrypt  = require('bcryptjs');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { sign, authenticate, requireAdmin } = require('./auth/middleware');
 const userStore = require('./auth/users');
 
@@ -20,65 +19,10 @@ if (!process.env.GEMINI_API_KEY) {
   process.exit(1);
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-
-function getGeminiModel(systemInstruction) {
-  const opts = { model: GEMINI_MODEL };
-  if (systemInstruction) opts.systemInstruction = systemInstruction;
-  return genAI.getGenerativeModel(opts);
-}
-
-// ── Shared file text extractor ────────────────────────────────────────────────
-// Supports: PDF (text + scanned/image fallback via Gemini), DOCX, images, plain text.
-const IMAGE_MIMES = new Set(['image/png','image/jpeg','image/jpg','image/gif','image/webp','image/bmp','image/tiff']);
-
-async function extractFileText(buffer, mime, origName) {
-  const isPDF  = mime === 'application/pdf'  || /\.pdf$/i.test(origName);
-  const isDOCX = mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || /\.docx$/i.test(origName);
-  const isImg  = IMAGE_MIMES.has(mime) || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(origName);
-
-  if (isPDF) {
-    let text = '';
-    try {
-      const pdfParse = require('pdf-parse');
-      const data = await pdfParse(buffer);
-      text = (data.text || '').trim();
-    } catch (_) {}
-
-    // Scanned / image-only PDF — fall back to Gemini vision
-    if (text.length < 200) {
-      const base64 = buffer.toString('base64');
-      const model  = getGeminiModel();
-      const result = await model.generateContent([
-        { inlineData: { mimeType: 'application/pdf', data: base64 } },
-        'Extract ALL text from this document exactly as it appears, including text inside images, figures, tables, and diagrams. Preserve structure using line breaks. Output only the extracted text — no commentary.',
-      ]);
-      text = result.response.text();
-    }
-    return text;
-  }
-
-  if (isDOCX) {
-    const mammoth = require('mammoth');
-    const result  = await mammoth.extractRawText({ buffer });
-    return result.value || '';
-  }
-
-  if (isImg) {
-    const imgMime = IMAGE_MIMES.has(mime) ? mime : 'image/jpeg';
-    const base64  = buffer.toString('base64');
-    const model   = getGeminiModel();
-    const result  = await model.generateContent([
-      { inlineData: { mimeType: imgMime, data: base64 } },
-      'Extract all visible text from this image exactly as it appears. Preserve layout using line breaks. Output only the extracted text with no commentary.',
-    ]);
-    return result.response.text();
-  }
-
-  return buffer.toString('utf8');
-}
+// Shared AI + document helpers (single source of truth, reused by feature modules)
+const { getModel: getGeminiModel } = require('./lib/llm');
+const { extractFileText }          = require('./lib/extract');
+const { buildWorkbook }            = require('./lib/excel');
 
 const app    = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -621,6 +565,61 @@ Example format: ["Specific question about document content 1", "Specific questio
     res.status(500).json({ error: err.message });
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXTRACT TEXT (no indexing)  POST /api/extract-text
+// Returns extracted text for a file so feature pages can analyse it without
+// adding it to the knowledge base.
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/extract-text', authenticate, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
+    const text = await extractFileText(req.file.buffer, req.file.mimetype, req.file.originalname);
+    if (!text || !text.trim()) return res.status(422).json({ error: 'Could not extract text from file.' });
+    res.json({ name: req.file.originalname, textLength: text.length, text });
+  } catch (err) {
+    console.error('[/api/extract-text]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT XLSX  POST /api/export/xlsx
+// Body: { filename, sheets: [{ name, columns:[label], rows:[obj|array], title?, meta? }] }
+// Generic Excel generator used by every feature page's "Download Excel" action.
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/export/xlsx', authenticate, (req, res) => {
+  try {
+    const { sheets, filename } = req.body;
+    if (!Array.isArray(sheets) || !sheets.length) return res.status(400).json({ error: 'sheets[] is required.' });
+    const buf  = buildWorkbook(sheets);
+    const safe = (filename || 'export').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.xlsx$/i, '');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}.xlsx"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[/api/export/xlsx]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature modules (all authenticated)
+//   /api/drawings     Extraction of data from drawings (cable schedules, etc.)
+//   /api/inspection   Inspection-report → categorised observations
+//   /api/lessons      Lessons-Learned repository (+ proactive suggestions)
+//   /api/compliance   Technical-offer scrutiny vs TTS → compliance matrix
+//   /api/binding      Vendor binding-data review vs POTS → gap analysis
+//   /api/prebid       Pre-bid query generation from RFP
+//   /api/designreview Design-review checklist + risk assessment
+// ─────────────────────────────────────────────────────────────────────────────
+app.use('/api/drawings',     authenticate, require('./features/drawings'));
+app.use('/api/inspection',   authenticate, require('./features/inspection'));
+app.use('/api/lessons',      authenticate, require('./features/lessons').router);
+app.use('/api/compliance',   authenticate, require('./features/compliance'));
+app.use('/api/binding',      authenticate, require('./features/binding'));
+app.use('/api/prebid',       authenticate, require('./features/prebid'));
+app.use('/api/designreview', authenticate, require('./features/designreview'));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Serve React build in production

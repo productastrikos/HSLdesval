@@ -1,0 +1,15 @@
+[
+  {
+    "id": "LESSONS-1780899691374-2840",
+    "createdAt": "2026-06-08T06:21:31.374Z",
+    "observation": "Cable glands not IP56 rated at weather deck speakers",
+    "category": "Installation",
+    "system": "MB/SRE",
+    "project": "11190-91",
+    "severity": "high",
+    "recommendation": "Specify IP56 glands for exposed deck devices",
+    "discipline": "",
+    "source": "manual",
+    "addedBy": "admin"
+  }
+]
