@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { getModel } = require('./llm');
-const { extractPdfPageTexts, rasterizePdfToPngs, isCanvasAvailable } = require('./rasterize');
+const { extractPdfPageTexts, rasterizePdfToPngs, isRendererAvailable } = require('./rasterize');
 
 // Build a specific, actionable error when a PDF yields no text — so a deployed
 // app reports the real cause instead of a blanket "could not read this file".
@@ -21,8 +21,8 @@ function diagnoseEmpty(scanned) {
   if (!scanned) {
     return readError('Could not read this file. It may be empty, password-protected, or a corrupted/incomplete PDF.');
   }
-  if (!isCanvasAvailable()) {
-    return readError('This looks like a scanned / image-only PDF, but the server\'s image renderer is unavailable, so OCR could not run. On the host, reinstall the server dependencies so "@napi-rs/canvas" installs for this platform (do not copy a Windows node_modules).');
+  if (!isRendererAvailable()) {
+    return readError('This looks like a scanned / image-only PDF, but the server\'s PDF renderer (mupdf) is unavailable, so OCR could not run. Reinstall the server dependencies on the host (cd server && npm install).');
   }
   if (!process.env.LLM_API_KEY) {
     return readError('This is a scanned / image-only PDF that needs OCR, but the AI vision engine is not configured. Set LLM_API_KEY in the deployment environment.', 503);

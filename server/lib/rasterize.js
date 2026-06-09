@@ -6,31 +6,30 @@
 //   - rasterizePdfToPngs(buffer, opts)   → [{ page, data }]  page images (base64 PNG)
 // Used so that pages WITHOUT a usable text layer can be handed to the vision
 // model as images for information extraction.
+//
+// Rasterisation uses mupdf — a pure-WASM renderer with NO native binaries, so it
+// behaves identically on every OS (Windows dev box ↔ Linux host). Text-layer
+// extraction uses pdf.js. Neither needs a platform-specific build step.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Canvas loader (native @napi-rs/canvas, prebuilt per-platform) ─────────────
-// Renders PDF pages to images for the vision-OCR fallback. The binary is
-// platform-specific, so it MUST be installed on the deployment host (not just the
-// dev machine). If it is missing we log a loud, specific error — otherwise scanned
-// PDFs silently extract to empty and surface as "Could not read this file".
-let _canvas;   // undefined = not yet tried, null = unavailable
-function getCanvas() {
-  if (_canvas === undefined) {
-    try {
-      _canvas = require('@napi-rs/canvas');
-    } catch (err) {
-      _canvas = null;
-      console.error(
-        '[rasterize] @napi-rs/canvas could not be loaded — scanned / image-only PDF pages ' +
-        'cannot be rendered for OCR, so such documents will extract to empty text. ' +
-        'Ensure it is installed for THIS platform on the host (run "npm install" in server/ ' +
-        'on the deployment machine). Detail: ' + err.message,
-      );
+// ── mupdf loader (WASM PDF renderer, lazy singleton) ──────────────────────────
+let _mupdf = null;
+let _mupdfLogged = false;
+async function getMupdf() {
+  if (_mupdf) return _mupdf;
+  try {
+    _mupdf = await import('mupdf');          // ESM module → dynamic import from CJS
+  } catch (err) {
+    if (!_mupdfLogged) {
+      console.error('[rasterize] mupdf (WASM PDF renderer) failed to load — scanned / image-only PDF pages cannot be rendered for OCR. Detail: ' + err.message);
+      _mupdfLogged = true;
     }
+    _mupdf = null;
   }
-  return _canvas;
+  return _mupdf;
 }
 
+// ── pdf.js loader (text-layer extraction only) ────────────────────────────────
 let _pdfjs = null;
 async function getPdfjs() {
   if (!_pdfjs) {
@@ -69,8 +68,12 @@ async function extractPdfPageTexts(buffer) {
   return out;
 }
 
+function safeDestroy(obj) {
+  try { if (obj && typeof obj.destroy === 'function') obj.destroy(); } catch (_) { /* ignore */ }
+}
+
 /**
- * Render PDF pages to PNG images (base64, no data: prefix).
+ * Render PDF pages to PNG images (base64, no data: prefix) using mupdf (WASM).
  * @param {Buffer} buffer
  * @param {Object} [opts]
  * @param {number[]} [opts.pages]   1-based page numbers to render (default: all, capped)
@@ -78,36 +81,50 @@ async function extractPdfPageTexts(buffer) {
  * @param {number}   [opts.scale]   render scale (default 2.0 — good legibility for OCR)
  */
 async function rasterizePdfToPngs(buffer, { pages, maxPages = 12, scale } = {}) {
-  const canvasMod = getCanvas();
-  if (!canvasMod) return [];              // already logged the reason in getCanvas()
-  const { createCanvas } = canvasMod;
+  const mupdf = await getMupdf();
+  if (!mupdf) return [];                     // already logged the reason in getMupdf()
   // Render scale: lower it (env EXTRACT_RENDER_SCALE) on memory-tight hosts where
   // large drawing pages can exhaust RAM during rasterisation.
   if (scale == null) scale = parseFloat(process.env.EXTRACT_RENDER_SCALE || '2.0');
-  const doc = await loadDocument(buffer);
 
+  let doc;
+  try {
+    doc = mupdf.Document.openDocument(new Uint8Array(buffer), 'application/pdf');
+  } catch (err) {
+    console.warn('[rasterize] could not open PDF:', err.message);
+    return [];
+  }
+
+  const numPages = doc.countPages();
   let target = pages && pages.length
-    ? pages.filter(p => p >= 1 && p <= doc.numPages)
-    : Array.from({ length: doc.numPages }, (_, i) => i + 1);
+    ? pages.filter(p => p >= 1 && p <= numPages)
+    : Array.from({ length: numPages }, (_, i) => i + 1);
   target = target.slice(0, maxPages);
 
+  const matrix = mupdf.Matrix.scale(scale, scale);
   const out = [];
   for (const p of target) {
+    let page, pix;
     try {
-      const page = await doc.getPage(p);
-      const viewport = page.getViewport({ scale });
-      const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
-      const context = canvas.getContext('2d');
-      await page.render({ canvasContext: context, viewport }).promise;
-      out.push({ page: p, data: canvas.toBuffer('image/png').toString('base64') });
-    } catch (err) { console.warn(`[rasterize] page ${p} could not be rendered:`, err.message); }
+      page = doc.loadPage(p - 1);            // mupdf page indices are 0-based
+      pix  = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false);
+      out.push({ page: p, data: Buffer.from(pix.asPNG()).toString('base64') });
+    } catch (err) {
+      console.warn(`[rasterize] page ${p} could not be rendered:`, err.message);
+    } finally {
+      safeDestroy(pix);
+      safeDestroy(page);                      // free WASM memory promptly
+    }
   }
-  try { await doc.destroy(); } catch (_) {}
+  safeDestroy(doc);
   return out;
 }
 
-// True if the native image renderer loaded — i.e. scanned-PDF OCR can run.
+// True if the WASM renderer is installed — i.e. scanned-PDF OCR can run.
+// Pure-WASM, so this is platform-independent (no per-OS native binary to miss).
 // Used by /api/health and the extractor's diagnostics.
-function isCanvasAvailable() { return !!getCanvas(); }
+function isRendererAvailable() {
+  try { require.resolve('mupdf'); return true; } catch (_) { return false; }
+}
 
-module.exports = { extractPdfPageTexts, rasterizePdfToPngs, isCanvasAvailable };
+module.exports = { extractPdfPageTexts, rasterizePdfToPngs, isRendererAvailable };
