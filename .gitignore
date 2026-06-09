@@ -11,3 +11,7 @@ server/.env
 
 # Auto-generated auth secret (never commit)
 server/data/.jwt-secret
+
+# Semantic embedding cache — only used when RAG_SEMANTIC=on; rebuilt on demand.
+# Kept out of the repo/deploy to stay lightweight (it is ~50 MB).
+server/rag/embcache/store.json

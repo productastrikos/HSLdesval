@@ -8,14 +8,18 @@ const CACHE_FILE = path.join(CACHE_DIR, 'store.json');
 const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
 const BATCH_SIZE = 32;
 
-// ── Semantic embeddings are OPTIONAL ──────────────────────────────────────────
-// They require @xenova/transformers (the onnxruntime-node native ML runtime):
+// ── Semantic embeddings are OPTIONAL (off by default, for a light footprint) ──
+// They rely on @xenova/transformers (the onnxruntime-node native ML runtime):
 // heavy native binaries, a model download, and a RAM/CPU spike while the index is
-// built. That combination OOM-crashes memory-capped shared hosting, so it is OFF
-// by default and retrieval falls back to the pure-JS BM25 keyword leg — which
+// built — which OOM-crashes memory-capped shared hosting. So the package is NOT
+// installed by default and retrieval uses the pure-JS BM25 keyword leg, which
 // deploys anywhere with zero native deps and is well-suited to clause/standard
-// lookups. Enable it where you have headroom (e.g. a VPS) with RAG_SEMANTIC=on,
-// and ship server/rag/embcache/store.json so the model needn't rebuild at boot.
+// lookups. To enable semantic search on a host with headroom (e.g. a VPS):
+//   1) cd server && npm install @xenova/transformers
+//   2) set RAG_SEMANTIC=on
+//   3) (optional) ship server/rag/embcache/store.json so it needn't rebuild at boot
+// If the flag is on but the package is missing, getModel() throws → caught → the
+// engine transparently falls back to BM25, so nothing breaks.
 const SEMANTIC_ENABLED = /^(1|true|on|yes)$/i.test(process.env.RAG_SEMANTIC || '');
 
 let _pipe  = null;
