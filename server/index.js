@@ -32,7 +32,7 @@ if (NODE_MAJOR < 18 || typeof fetch !== 'function') {
 }
 
 // Shared inference + document helpers (single source of truth, reused by feature modules)
-const { getModel, generateText }   = require('./lib/llm');
+const { getModel, generateText, generateJSON } = require('./lib/llm');
 const { extractFileText }          = require('./lib/extract');
 const { isCanvasAvailable }        = require('./lib/rasterize');
 const { buildWorkbook }            = require('./lib/excel');
@@ -458,7 +458,50 @@ app.post('/api/upload', authenticate, upload.single('file'), async (req, res) =>
 // CONVERT DOCUMENT  POST /api/convert
 // Body (multipart): file, format (TXT | XLSX | DOCX | ODF)
 // Returns the converted file as a download.
+//
+// XLSX conversion targets the official inspection-remarks register format
+// (Drishti iDEX MVP submission template): the document is parsed by AI into
+// these exact columns, one row per remark/observation.
 // ─────────────────────────────────────────────────────────────────────────────
+const INSPECTION_REMARK_COLUMNS = [
+  'S.No',
+  'Name of the project',
+  'Name of the equipment /system/material',
+  'Name of the inspection agency',
+  'Date of the inspection',
+  'Document no if any',
+  'Trial sl.no',
+  'Description of the remark',
+  'SAT/UNSAT',
+  'classification of the remark',
+  'Signed by ',
+];
+
+async function extractInspectionRows(text, docName) {
+  const prompt = `You are processing an inspection / trial / technical document to fill an official inspection-remarks register.
+Extract EVERY distinct remark, observation, defect, non-conformance or trial result as ONE row.
+
+Return ONLY valid JSON of the form: { "rows": [ { ...one object per remark... } ] }
+Each object MUST use EXACTLY these keys (use "" when the document does not state a value):
+${INSPECTION_REMARK_COLUMNS.map(c => `  - "${c}"`).join('\n')}
+
+Guidance:
+- "S.No": leave "" (it is renumbered automatically).
+- "Description of the remark": the remark / observation / finding text — precise and complete.
+- "SAT/UNSAT": "SAT" if satisfactory / acceptable / passed; "UNSAT" if a defect / non-conformance / failure; else "".
+- "classification of the remark": Major / Minor / Observation / Critical when indicated, else "".
+- Project, equipment/system, inspection agency, date, document no and trial sl.no usually appear in the header/context — repeat them on each row where applicable.
+- Never invent values. Use "" for anything not present in the document.
+
+Document name: ${docName}
+Document content:
+${text.slice(0, 12000)}`;
+
+  const out  = await generateJSON(prompt, { temperature: 0, maxOutputTokens: 8000 });
+  const rows = Array.isArray(out) ? out : (Array.isArray(out?.rows) ? out.rows : []);
+  return rows.filter(r => r && typeof r === 'object');
+}
+
 app.post('/api/convert', authenticate, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
@@ -477,17 +520,22 @@ app.post('/api/convert', authenticate, upload.single('file'), async (req, res) =
 
     // ── Produce output ───────────────────────────────────────────────────────
     if (format === 'XLSX') {
-      const XLSX  = require('xlsx');
-      const lines = text.split('\n');
-      // Build rows: each non-empty line → own row; try to split on common delimiters for table-like content
-      const rows = lines.map(line => {
-        const cols = line.split(/\t|  {2,}/).map(c => c.trim()).filter(Boolean);
-        return cols.length > 1 ? cols : [line];
-      });
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Extracted');
-      const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+      // AI-extract the document into the official inspection-remarks columns.
+      // If extraction fails (e.g. AI unavailable), still emit the correctly
+      // formatted template (headers only) so the output format is guaranteed.
+      let rows = [];
+      try {
+        rows = await extractInspectionRows(text, origName);
+      } catch (err) {
+        console.warn('[/api/convert] inspection extraction failed — emitting template only:', err.message);
+      }
+      rows.forEach((r, i) => { r['S.No'] = String(i + 1); });   // renumber serially
+
+      const buf = buildWorkbook([{
+        name:    'Inspection Remarks',
+        columns: INSPECTION_REMARK_COLUMNS,
+        rows,
+      }]);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${baseName}.xlsx"`);
       return res.send(buf);
