@@ -1,12 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// HSL Design Validator — AI Service
-// Calls the local Express backend (proxied via React dev server).
-// The Gemini API key is configured server-side via server/.env
+// HSL Design Validator — Inference Service
+// Calls the local on-premise backend (proxied via the dev server in development).
+// All inference runs locally on the appliance; nothing leaves the network.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const API_BASE = '/api';
 
-// Always true — API key is configured server-side via server/.env
+// The on-premise inference engine is always available server-side.
 export function isConfigured() { return true; }
 
 // ── Auth token helper ─────────────────────────────────────────────────────────
@@ -17,26 +17,33 @@ function getToken() {
 // ── Internal fetch helper ─────────────────────────────────────────────────────
 async function apiFetch(path, options = {}) {
   const token = getToken();
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        ...(options.headers || {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+  } catch (_) {
+    // Network failure / server unreachable / CORS — fetch rejects with TypeError.
+    throw new Error('Cannot reach the server. Please check your connection and that the application is running.');
+  }
 
   if (res.status === 401) {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     window.dispatchEvent(new Event('auth:logout'));
-    throw new Error('Session expired — please sign in again');
+    throw new Error('Session expired — please sign in again.');
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-    throw new Error(body.error || `HTTP ${res.status}`);
+    const body = await res.json().catch(() => ({ error: `Request failed (HTTP ${res.status}).` }));
+    throw new Error(body.error || `Request failed (HTTP ${res.status}).`);
   }
-  return res.json();
+  return res.json().catch(() => ({}));
 }
 
 async function post(path, body) {
@@ -59,8 +66,8 @@ export async function extractChatDoc(file) {
   return apiFetch('/chat-extract', { method: 'POST', body: form });
 }
 
-export async function validate(specId, domain, additionalContext) {
-  return post('/validate', { specId, domain, additionalContext });
+export async function validate({ specId, specText, specName, domain, additionalContext }) {
+  return post('/validate', { specId, specText, specName, domain, additionalContext });
 }
 
 export async function compareByIds(docAId, docBId, docAName, docBName) {
@@ -71,12 +78,19 @@ export async function compareByText(docAText, docBText, docAName, docBName) {
   return post('/compare', { docAText, docBText, docAName, docBName });
 }
 
-export async function uploadDocument(file, docType, docName) {
+// Upload a document: the backend extracts text (vision OCR for image-only pages)
+// and auto-classifies the document type. The extracted text is returned to the
+// caller, which persists it in the browser document store.
+export async function uploadDocument(file, docName) {
   const form = new FormData();
   form.append('file',    file);
-  form.append('docType', docType  || '');
-  form.append('docName', docName  || file.name);
+  form.append('docName', docName || file.name);
   return apiFetch('/upload', { method: 'POST', body: form });
+}
+
+// Parsed text of the built-in knowledge-base documents (for local caching only).
+export async function getBaseKnowledge() {
+  return apiFetch('/base-knowledge');
 }
 
 export async function getKbStatus() {

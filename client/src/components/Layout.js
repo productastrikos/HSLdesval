@@ -35,12 +35,6 @@ const NAV_SECTIONS = [
     ],
   },
   {
-    label: 'Visualization',
-    items: [
-      { path: '/visualizer',     roles: ['admin','user'], icon: 'M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12', label: '3D Design Viewer' },
-    ],
-  },
-  {
     label: 'Administration',
     items: [
       { path: '/users',          roles: ['admin'],        icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', label: 'User Management' },
@@ -70,9 +64,8 @@ const SEARCH_INDEX = [
   { label:'Binding Data Review',   path:'/binding',         breadcrumb:['Procurement & Review','Binding Data'],   icon:'📦', keywords:'vendor binding data review pots purchase order technical specification gap analysis drawings calculations certificates manuals test procedures missing', roles:['admin','user'] },
   { label:'Pre-Bid Queries',       path:'/prebid',          breadcrumb:['Procurement & Review','Pre-Bid'],        icon:'📋', keywords:'pre bid query generation rfp tender ambiguity contradiction missing information impractical requirement execution risk clarification', roles:['admin','user'] },
   { label:'Design Review',         path:'/design-review',   breadcrumb:['Procurement & Review','Design Review'],  icon:'📋', keywords:'design review risk assessment checklist system wise recurring deficiency preventive measure rules historical', roles:['admin','user'] },
-  { label:'3D Design Viewer',      path:'/visualizer',      breadcrumb:['Visualization','3D Viewer'],            icon:'🗺', keywords:'3d visualizer design viewer ship hull frames bulkhead compartment three dimensional model', roles:['admin','user'] },
   { label:'User Management',       path:'/users',           breadcrumb:['Administration','Users'],               icon:'👥', keywords:'users accounts roles admin engineer access management permissions', roles:['admin'] },
-  { label:'Settings & AI Config',  path:'/settings',        breadcrumb:['System','Settings'],                    icon:'⚙', keywords:'settings api key anthropic claude ai configuration knowledge base kb rag backend server', roles:['admin'] },
+  { label:'Settings',              path:'/settings',        breadcrumb:['System','Settings'],                    icon:'⚙', keywords:'settings configuration knowledge base kb rag backend server connection', roles:['admin'] },
 ];
 
 /* ─── Icon helper ──────────────────────────────────────── */
@@ -111,9 +104,8 @@ const PAGE_TITLES = {
   '/binding':         'Vendor Binding Data Review',
   '/prebid':          'Pre-Bid Query Generation',
   '/design-review':   'Design Review & Risk Assessment',
-  '/visualizer':      '3D Design Viewer',
   '/users':           'User Management',
-  '/settings':        'Settings & AI Config',
+  '/settings':        'Settings',
 };
 
 const ROLE_DISPLAY = { admin: 'Administrator', user: 'Design Engineer' };

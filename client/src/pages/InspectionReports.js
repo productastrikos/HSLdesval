@@ -1,24 +1,23 @@
-import React, { useRef, useState } from 'react';
-import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, Field, Spinner } from '../components/feature/FeatureKit';
+import React, { useState } from 'react';
+import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, DocSource, Field, Spinner } from '../components/feature/FeatureKit';
 import { analyzeInspection } from '../services/featureApi';
 
 const COLUMNS = ['slNo', 'reportRef', 'observation', 'type', 'category', 'system', 'discipline', 'severity', 'rootCause', 'recommendation', 'clauseRef'];
 const HEADERS = ['Sl.No', 'Report Ref', 'Observation', 'Type', 'Category', 'System', 'Discipline', 'Severity', 'Root Cause', 'Recommendation / CAPA', 'Clause Ref'];
 
 export default function InspectionReports() {
-  const [file, setFile]       = useState(null);
+  const [doc, setDoc]         = useState(null);
   const [project, setProject] = useState('');
   const [save, setSave]       = useState(true);
   const [busy, setBusy]       = useState(false);
   const [error, setError]     = useState(null);
   const [result, setResult]   = useState(null);
-  const fileRef = useRef(null);
 
   const run = async () => {
-    if (!file) { setError('Select an inspection report first.'); return; }
+    if (!doc) { setError('Select an inspection report first.'); return; }
     setBusy(true); setError(null); setResult(null);
     try {
-      const res = await analyzeInspection({ file, project, saveToLessons: save });
+      const res = await analyzeInspection({ text: doc.text, name: doc.name, project, saveToLessons: save });
       setResult(res);
       if (!res.observations?.length) setError('No observations were extracted from this report.');
     } catch (e) { setError(e.message); }
@@ -37,16 +36,10 @@ export default function InspectionReports() {
       title="Inspection Report Converter"
       subtitle="Process inspection reports of any project — automatically extract observations, non-conformities and remarks, classify them (Material · Design/Drawing · Workmanship · Installation · Documentation · Testing & Commissioning) and export to Excel. Findings are added to the searchable Lessons-Learned repository."
     >
-      <Card title="Upload Inspection Report" desc="PDF, scanned PDF, DOCX or image. Tag it with the project so lessons are organised project-wise.">
+      <Card title="Select Inspection Report" desc="Choose a document you uploaded on the Documents page. Tag it with the project so lessons are organised project-wise.">
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-3">
-            <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setResult(null); setError(null); } }} />
-            <button onClick={() => fileRef.current?.click()}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-              <span className="truncate">{file ? file.name : 'Select inspection report…'}</span>
-            </button>
+            <DocSource label="Inspection Report" value={doc} onChange={(v) => { setDoc(v); setResult(null); setError(null); }} />
           </div>
           <div className="space-y-3">
             <Field label="Project" value={project} onChange={setProject} placeholder="e.g. Yard 11190-91 / DSV" />

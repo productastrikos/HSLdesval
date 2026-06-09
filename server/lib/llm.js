@@ -1,97 +1,205 @@
 'use strict';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared Gemini LLM helpers
-//   - getModel(systemInstruction)          → raw GenerativeModel (chat / vision)
+// On-premise inference engine
+//   - getModel(systemInstruction)          → model handle (chat / vision)
 //   - generateText(prompt, opts)           → plain text completion
-//   - generateJSON(prompt, opts)           → parsed JSON (responseMimeType=json)
+//   - generateJSON(prompt, opts)           → parsed JSON
 //   - generateJSONFromParts(parts, opts)   → parsed JSON from multimodal parts
-//                                            (PDF / image inlineData + text)
-// All calls run server-side; the API key never reaches the client.
+//                                            (text + page images for scanned docs)
+//
+// All inference runs server-side on the local appliance; no credentials or
+// document content ever reach the browser. Vision-capable requests receive page
+// images (PDF pages are rasterised internally) for layout/figure understanding.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { rasterizePdfToPngs } = require('./rasterize');
 
-const genAI        = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const ENGINE_URL    = (process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/+$/, '') + '/chat/completions';
+const ENGINE_KEY    = process.env.LLM_API_KEY || '';
+const TEXT_MODEL    = process.env.LLM_MODEL        || 'llama-3.3-70b-versatile';
+const VISION_MODEL  = process.env.LLM_VISION_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct';
+const MAX_COMPLETION = parseInt(process.env.LLM_MAX_TOKENS || '8000', 10);
+// Vision models accept only a handful of images per request — keep within that.
+const MAX_VISION_PAGES = parseInt(process.env.LLM_MAX_VISION_PAGES || '5', 10);
+const MAX_IMAGES_PER_REQUEST = 5;
 
-function getModel(systemInstruction) {
-  const opts = { model: GEMINI_MODEL };
-  if (systemInstruction) opts.systemInstruction = systemInstruction;
-  return genAI.getGenerativeModel(opts);
-}
-
-// ── Robust JSON parsing ─────────────────────────────────────────────────────
-// Gemini in JSON mode usually returns clean JSON, but we defend against stray
-// markdown fences, leading prose, or trailing commentary.
+// ── Robust JSON parsing ──────────────────────────────────────────────────────
 function parseJsonLoose(text) {
   if (!text) return null;
   let t = String(text).trim();
-
-  // Strip ```json … ``` fences if present
   t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-
   try { return JSON.parse(t); } catch (_) { /* fall through */ }
-
-  // Grab the first {...} or [...] block
   const objMatch = t.match(/\{[\s\S]*\}/);
   const arrMatch = t.match(/\[[\s\S]*\]/);
-  const candidates = [arrMatch?.[0], objMatch?.[0]].filter(Boolean);
-  for (const c of candidates) {
+  for (const c of [arrMatch?.[0], objMatch?.[0]].filter(Boolean)) {
     try { return JSON.parse(c); } catch (_) { /* try next */ }
   }
   return null;
 }
 
-async function _callText(parts, { system, maxOutputTokens = 8192, temperature = 0.2, json = false } = {}) {
-  const model = getModel(system);
-  const generationConfig = { temperature, maxOutputTokens };
-  if (json) generationConfig.responseMimeType = 'application/json';
+// ── Multimodal part normalisation ────────────────────────────────────────────
+// Accepts a string, or an array of { text } / { inlineData:{ mimeType, data } }.
+// PDF inlineData is rasterised to page images so the vision model can read it.
+async function normaliseParts(parts) {
+  if (typeof parts === 'string') return { segments: [{ type: 'text', text: parts }], hasImage: false };
 
-  const result = await model.generateContent({
-    contents: [{ role: 'user', parts: Array.isArray(parts) ? parts : [{ text: parts }] }],
-    generationConfig,
+  const list = Array.isArray(parts) ? parts : [parts];
+  const segments = [];
+  let hasImage = false;
+
+  for (const p of list) {
+    if (p == null) continue;
+    if (typeof p === 'string') { segments.push({ type: 'text', text: p }); continue; }
+    if (p.text != null)        { segments.push({ type: 'text', text: String(p.text) }); continue; }
+    if (p.inlineData) {
+      const { mimeType, data } = p.inlineData;
+      if (mimeType === 'application/pdf') {
+        const pngs = await rasterizePdfToPngs(Buffer.from(data, 'base64'), { maxPages: MAX_VISION_PAGES }).catch(() => []);
+        for (const pg of pngs) {
+          segments.push({ type: 'image_url', image_url: { url: `data:image/png;base64,${pg.data}` } });
+          hasImage = true;
+        }
+      } else {
+        const mt = mimeType && mimeType.startsWith('image/') ? mimeType : 'image/png';
+        segments.push({ type: 'image_url', image_url: { url: `data:${mt};base64,${data}` } });
+        hasImage = true;
+      }
+    }
+  }
+
+  // Cap the number of images per request to what the vision model accepts.
+  let imgCount = 0;
+  const capped = segments.filter(s => {
+    if (s.type !== 'image_url') return true;
+    return ++imgCount <= MAX_IMAGES_PER_REQUEST;
   });
-  return result.response.text();
+  return { segments: capped, hasImage };
 }
 
+// ── Core request ─────────────────────────────────────────────────────────────
+function inferenceError(message, status) {
+  const err = new Error(message);
+  err.status = status;          // surfaced by route handlers as the HTTP status
+  err.isInferenceError = true;
+  return err;
+}
+
+async function callEngine(messages, { json = false, vision = false, maxOutputTokens = 4096, temperature = 0.2 } = {}) {
+  if (!ENGINE_KEY) throw inferenceError('The local inference engine is not configured.', 503);
+
+  const body = {
+    model:       vision ? VISION_MODEL : TEXT_MODEL,
+    messages,
+    temperature,
+    max_tokens:  Math.min(maxOutputTokens || 4096, MAX_COMPLETION),
+  };
+  // Structured-output mode is reliable for text requests; vision requests rely on
+  // prompt discipline + tolerant parsing instead.
+  if (json && !vision) body.response_format = { type: 'json_object' };
+
+  let res;
+  try {
+    res = await fetch(ENGINE_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ENGINE_KEY}` },
+      body:    JSON.stringify(body),
+    });
+  } catch (err) {
+    console.error('[inference] transport error:', err.message);
+    throw inferenceError('The local inference engine is unreachable.', 502);
+  }
+
+  if (!res.ok) {
+    let detail = '';
+    try { const j = await res.json(); detail = j.error?.message || JSON.stringify(j); }
+    catch (_) { detail = await res.text().catch(() => ''); }
+    console.error(`[inference] HTTP ${res.status}: ${detail}`);
+    // 429 (rate/quota) is transient — signal "service unavailable, retry".
+    const status = res.status === 429 ? 503 : 502;
+    throw inferenceError(`The local inference engine returned an error (HTTP ${res.status}).`, status);
+  }
+
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+
+// ── Model handle (uniform surface used across the codebase) ───────────────────
+function getModel(systemInstruction) {
+  const system = systemInstruction || null;
+
+  return {
+    async generateContent(parts, genCfg = {}) {
+      const { segments, hasImage } = await normaliseParts(parts);
+      const messages = [];
+      if (system) messages.push({ role: 'system', content: system });
+      messages.push({
+        role: 'user',
+        content: (segments.length === 1 && segments[0].type === 'text') ? segments[0].text : segments,
+      });
+      const text = await callEngine(messages, {
+        vision:          hasImage,
+        json:            !!genCfg.json,
+        temperature:     genCfg.temperature ?? 0.2,
+        maxOutputTokens: genCfg.maxOutputTokens || 4096,
+      });
+      return { response: { text: () => text } };
+    },
+
+    startChat({ history = [] } = {}) {
+      const base = [];
+      if (system) base.push({ role: 'system', content: system });
+      for (const h of history) {
+        const role = h.role === 'model' ? 'assistant' : (h.role || 'user');
+        const content = Array.isArray(h.parts) ? h.parts.map(p => p.text || '').join('\n') : (h.content || '');
+        base.push({ role, content });
+      }
+      return {
+        async sendMessage(message) {
+          const msgs = [...base, { role: 'user', content: typeof message === 'string' ? message : String(message) }];
+          const text = await callEngine(msgs, { temperature: 0.3, maxOutputTokens: 4096 });
+          return { response: { text: () => text } };
+        },
+      };
+    },
+  };
+}
+
+// ── Convenience wrappers ─────────────────────────────────────────────────────
 async function generateText(prompt, opts = {}) {
-  return _callText(prompt, { ...opts, json: false });
+  const r = await getModel(opts.system).generateContent(prompt, {
+    temperature: opts.temperature ?? 0.2, maxOutputTokens: opts.maxOutputTokens || 4096, json: false,
+  });
+  return r.response.text();
 }
 
-/**
- * Generate parsed JSON. Retries once with a stricter reminder if parsing fails.
- */
 async function generateJSON(prompt, opts = {}) {
-  const raw = await _callText(prompt, { ...opts, json: true, maxOutputTokens: opts.maxOutputTokens || 16384 });
-  let parsed = parseJsonLoose(raw);
+  const model = getModel(opts.system);
+  const r = await model.generateContent(prompt, {
+    temperature: opts.temperature ?? 0.2, maxOutputTokens: opts.maxOutputTokens || 8000, json: true,
+  });
+  let parsed = parseJsonLoose(r.response.text());
   if (parsed !== null) return parsed;
 
-  // One retry with an explicit correction instruction
-  const retryRaw = await _callText(
+  const retry = await model.generateContent(
     `${typeof prompt === 'string' ? prompt : ''}\n\nIMPORTANT: Your previous reply was not valid JSON. Reply with ONLY valid JSON — no markdown, no prose.`,
-    { ...opts, json: true, maxOutputTokens: opts.maxOutputTokens || 16384 },
+    { temperature: opts.temperature ?? 0.2, maxOutputTokens: opts.maxOutputTokens || 8000, json: true },
   );
-  parsed = parseJsonLoose(retryRaw);
+  parsed = parseJsonLoose(retry.response.text());
   if (parsed !== null) return parsed;
-
-  throw new Error('Model did not return parseable JSON.');
+  throw inferenceError('The model did not return a valid structured result. Please try again.', 502);
 }
 
-/**
- * Multimodal JSON: parts = [{ inlineData:{mimeType,data} }, { text }, …].
- * Used for reading drawings / scanned PDFs.
- */
 async function generateJSONFromParts(parts, opts = {}) {
-  const raw = await _callText(parts, { ...opts, json: true, maxOutputTokens: opts.maxOutputTokens || 16384 });
-  const parsed = parseJsonLoose(raw);
-  if (parsed === null) throw new Error('Model did not return parseable JSON from document.');
+  const r = await getModel(opts.system).generateContent(parts, {
+    temperature: opts.temperature ?? 0, maxOutputTokens: opts.maxOutputTokens || 8000, json: true,
+  });
+  const parsed = parseJsonLoose(r.response.text());
+  if (parsed === null) throw inferenceError('The model could not read this document into a structured result. Please try again.', 502);
   return parsed;
 }
 
 module.exports = {
-  genAI,
-  GEMINI_MODEL,
   getModel,
   generateText,
   generateJSON,

@@ -127,7 +127,7 @@ router.post('/gap', async (req, res) => {
     });
   } catch (err) {
     console.error('[/api/binding/gap]', err.message);
-    res.status(err.message.includes('No ') ? 400 : 500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 

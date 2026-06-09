@@ -258,13 +258,16 @@ function removeDocument(docId) {
 }
 
 function getStatus() {
+  // Intentionally omits document identities — the pre-loaded knowledge base is
+  // internal to the inference engine and must not be exposed to the application.
+  const userDocs = [...docStore.values()].filter(d => d.uploadedBy !== 'system');
   return {
     ready:          _kbReady,
     documents:      docStore.size,
     chunks:         chunkStore.size,
     vectorsIndexed: vecStore.size,
     bm25Indexed:    bm25.size,
-    docs:           getAllDocs(),
+    userDocuments:  userDocs.length,
   };
 }
 

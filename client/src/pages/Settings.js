@@ -1,28 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  testConnection, getKbStatus,
-} from '../services/aiService';
+import { testConnection, getKbStatus } from '../services/aiService';
 
 function StatusDot({ ok }) {
-  return (
-    <span className={`inline-block w-2 h-2 rounded-full ${ok ? 'bg-emerald-400' : 'bg-red-400'}`} />
-  );
+  return <span className={`inline-block w-2 h-2 rounded-full ${ok ? 'bg-emerald-400' : 'bg-red-400'}`} />;
 }
 
 export default function Settings() {
-  const [testing,     setTesting]     = useState(false);
-  const [testResult,  setTestResult]  = useState(null);
-  const [kbStatus,    setKbStatus]    = useState(null);
-  const [kbLoading,   setKbLoading]   = useState(true);
+  const [testing,    setTesting]    = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [kbStatus,   setKbStatus]   = useState(null);
+  const [kbLoading,  setKbLoading]  = useState(true);
 
   const refreshKb = useCallback(async () => {
     setKbLoading(true);
-    try {
-      const s = await getKbStatus();
-      setKbStatus(s);
-    } catch (_) {
-      setKbStatus(null);
-    }
+    try { setKbStatus(await getKbStatus()); }
+    catch (_) { setKbStatus(null); }
     setKbLoading(false);
   }, []);
 
@@ -33,7 +25,7 @@ export default function Settings() {
     setTestResult(null);
     try {
       const res = await testConnection();
-      setTestResult({ ok: true, msg: `Backend reachable · ${res.documents} documents · ${res.chunks} chunks indexed` });
+      setTestResult({ ok: true, msg: `Inference engine online · ${res.chunks} knowledge chunks indexed` });
       setKbStatus(res);
     } catch (e) {
       setTestResult({ ok: false, msg: e.message });
@@ -46,16 +38,16 @@ export default function Settings() {
       <div>
         <h1 className="text-xl font-bold text-white tracking-tight">Settings</h1>
         <p className="text-[11px] text-slate-400 mt-0.5">
-          Manage the knowledge base and verify the AI backend connection.
+          Verify the on-premise inference engine and review the built-in knowledge base.
         </p>
       </div>
 
-      {/* ── Backend Connection ────────────────────────────────────────────── */}
+      {/* ── Inference engine ──────────────────────────────────────────────── */}
       <div className="bg-app-panel border border-app-border rounded-xl p-5 space-y-4">
-        <h2 className="text-sm font-bold text-white">Backend Connection</h2>
+        <h2 className="text-sm font-bold text-white">On-Premise Inference Engine</h2>
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          The Gemini API key is configured in <code className="font-mono bg-slate-800 text-slate-200 px-1 rounded">server/.env</code> — no browser configuration required.
-          All AI calls are made server-side; the key is never exposed to the client.
+          All language and vision processing runs locally on the appliance. No documents, queries or
+          credentials ever leave the network — the system is fully self-contained and air-gapped.
         </p>
         <div className="flex items-center gap-3">
           <button
@@ -92,69 +84,37 @@ export default function Settings() {
         </div>
 
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          The knowledge base is pre-loaded with IRS, IACS, IMO (MARPOL/SOLAS), IEC 60092, DNV, and ABS
-          rule excerpts used for RAG retrieval. Upload additional documents (PDFs, DOCX) from the
-          Document Intelligence page to expand the knowledge base.
+          The engine is grounded in a built-in maritime rule base (IRS, IACS, IMO MARPOL/SOLAS, IEC 60092,
+          DNV and ABS) used for retrieval. These reference sources are internal to the engine. Upload your
+          own documents from the <span className="text-sky-400">Document Intelligence</span> page — they
+          stay in your workspace for the session and power every tool.
         </p>
 
         {kbStatus ? (
-          <>
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
-                <div className="text-xl font-bold text-sky-400">{kbStatus.documents}</div>
-                <div className="text-[10px] text-slate-500 uppercase mt-0.5">Documents</div>
-              </div>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
-                <div className="text-xl font-bold text-violet-400">{kbStatus.chunks}</div>
-                <div className="text-[10px] text-slate-500 uppercase mt-0.5">Chunks</div>
-              </div>
-              <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
-                <div className="text-xl font-bold text-emerald-400">{kbStatus.docs?.filter(d => !d.id.startsWith('STATIC')).length || 0}</div>
-                <div className="text-[10px] text-slate-500 uppercase mt-0.5">User Uploads</div>
-              </div>
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
+              <div className="text-xl font-bold text-violet-400">{(kbStatus.chunks || 0).toLocaleString()}</div>
+              <div className="text-[10px] text-slate-500 uppercase mt-0.5">Knowledge Chunks</div>
             </div>
-
-            {kbStatus.docs && kbStatus.docs.length > 0 && (
-              <div className="max-h-64 overflow-y-auto rounded-lg border border-app-border">
-                <table className="w-full text-[11px]">
-                  <thead className="text-[9px] uppercase tracking-widest text-slate-500 bg-white/[0.02] sticky top-0">
-                    <tr>
-                      <th className="text-left px-3 py-2">Document</th>
-                      <th className="text-left px-3 py-2">Type</th>
-                      <th className="text-right px-3 py-2">Source</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/[0.04]">
-                    {kbStatus.docs.map(d => (
-                      <tr key={d.id} className="hover:bg-white/[0.02]">
-                        <td className="px-3 py-2 text-slate-200">{d.name}</td>
-                        <td className="px-3 py-2">
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ${
-                            d.id.startsWith('STATIC')
-                              ? 'bg-slate-700 text-slate-300 border-slate-600'
-                              : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                          }`}>{d.type}</span>
-                        </td>
-                        <td className="px-3 py-2 text-right text-slate-500 font-mono text-[9px]">
-                          {d.id.startsWith('STATIC') ? 'pre-loaded' : 'uploaded'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
+            <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
+              <div className="text-xl font-bold text-sky-400">{(kbStatus.vectorsIndexed || 0).toLocaleString()}</div>
+              <div className="text-[10px] text-slate-500 uppercase mt-0.5">Vectors Indexed</div>
+            </div>
+            <div className="bg-slate-950/40 border border-slate-800 rounded-lg p-3">
+              <div className="text-xl font-bold text-emerald-400">{kbStatus.ready ? 'Ready' : 'Loading'}</div>
+              <div className="text-[10px] text-slate-500 uppercase mt-0.5">Engine State</div>
+            </div>
+          </div>
         ) : kbLoading ? (
-          <div className="text-[11px] text-slate-500">Loading KB status…</div>
+          <div className="text-[11px] text-slate-500">Loading status…</div>
         ) : (
           <div className="text-[11px] text-red-400">
-            Backend server not reachable. Start the server with <code className="font-mono bg-slate-800 px-1 rounded">npm run dev</code> from the project root.
+            Backend server not reachable. Start the system with <code className="font-mono bg-slate-800 px-1 rounded">npm run dev</code> from the project root.
           </div>
         )}
       </div>
 
-      {/* ── How to run ────────────────────────────────────────────────────── */}
+      {/* ── Quick Start ───────────────────────────────────────────────────── */}
       <div className="bg-app-panel border border-app-border rounded-xl p-5 space-y-3">
         <h2 className="text-sm font-bold text-white">Quick Start</h2>
         <div className="space-y-2 text-[11px] text-slate-400">
@@ -164,28 +124,24 @@ export default function Settings() {
           </div>
           <div className="flex items-start gap-2">
             <span className="text-sky-400 font-mono font-bold mt-0.5">2.</span>
-            <span>Add your Gemini API key to <code className="font-mono bg-slate-800 text-slate-200 px-1 rounded">server/.env</code> as <code className="font-mono bg-slate-800 text-slate-200 px-1 rounded">GEMINI_API_KEY=...</code>.</span>
+            <span>Click <span className="text-white font-semibold">Test Connection</span> above to confirm the engine is running and the knowledge base is loaded.</span>
           </div>
           <div className="flex items-start gap-2">
             <span className="text-sky-400 font-mono font-bold mt-0.5">3.</span>
-            <span>Click <span className="text-white font-semibold">Test Connection</span> above to confirm the backend is running and the KB is loaded.</span>
+            <span>Upload your documents in <span className="text-sky-400">Document Intelligence</span> — they are read (with vision for scanned pages) and classified automatically.</span>
           </div>
           <div className="flex items-start gap-2">
             <span className="text-sky-400 font-mono font-bold mt-0.5">4.</span>
-            <span>Upload your documents in <span className="text-sky-400">Document Intelligence</span> — PDFs and DOCX are extracted and indexed automatically.</span>
-          </div>
-          <div className="flex items-start gap-2">
-            <span className="text-sky-400 font-mono font-bold mt-0.5">5.</span>
-            <span>Use the <span className="text-sky-400">Design Assistant</span> to ask questions grounded in the knowledge base, or run the <span className="text-sky-400">Rule Validator</span> and <span className="text-sky-400">Spec Generator</span> for AI-powered outputs.</span>
+            <span>Use the <span className="text-sky-400">Design Assistant</span> and the analysis tools — each lets you pick one of your uploaded documents.</span>
           </div>
         </div>
       </div>
 
-      {/* ── Model info ────────────────────────────────────────────────────── */}
+      {/* ── Engine info ───────────────────────────────────────────────────── */}
       <div className="bg-app-panel border border-app-border rounded-xl p-4 text-[11px] text-slate-400 flex items-center justify-between">
         <div>
-          <span className="text-white font-semibold">Model:</span>{' '}
-          gemini-2.0-flash · RAG: TF-IDF in-memory · Chunks: 200 words / 40 overlap
+          <span className="text-white font-semibold">Engine:</span>{' '}
+          On-premise LLM · Hybrid BM25 + semantic retrieval · Local vision OCR
         </div>
         <span className="text-[9px] uppercase tracking-widest text-slate-600 font-bold">HSL Design Validator</span>
       </div>

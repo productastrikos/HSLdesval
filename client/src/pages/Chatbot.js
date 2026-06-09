@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { chat, extractChatDoc, isConfigured } from '../services/aiService';
-import { generateResponse, RULE_CORPUS, DOMAINS } from '../services/hslKnowledge';
+import { chat } from '../services/aiService';
+import { listUserDocs, getUserDoc } from '../services/docStore';
+import { RULE_CORPUS, DOMAINS } from '../services/hslKnowledge';
 
 // ── Session persistence ───────────────────────────────────────────────────────
 const SESSIONS_KEY = 'hsl_chat_sessions';
@@ -21,11 +21,9 @@ function makeWelcomeMsg() {
     id:        'welcome-' + Date.now(),
     role:      'assistant',
     isWelcome: true,
-    content:   isConfigured()
-      ? "Welcome to the HSL Design Assistant.\n\nI can help you interpret classification society rules (IRS/DNV/ABS/IACS), IMO and IEC regulations, and Naval standards. Ask me to validate Build Specifications, cross-reference design documents against compliance requirements, generate technical specs, or perform engineering calculations.\n\nTry a suggested prompt or ask anything about your vessel design."
-      : "Welcome to the HSL Design Assistant (Demo Mode).\n\nI'm currently running on static knowledge. Configure your API key in **Settings** to enable live responses grounded in your uploaded knowledge base.\n\nIn the meantime you can explore the static rule corpus below.",
+    content:   "Welcome to the HSL Design Assistant.\n\nI can help you interpret classification society rules (IRS/DNV/ABS/IACS), IMO and IEC regulations, and Naval standards. Ask me to validate Build Specifications, cross-reference design documents against compliance requirements, generate technical specs, or perform engineering calculations.\n\nSelect one of your uploaded documents as reference context, try a suggested prompt, or ask anything about your vessel design.",
     timestamp: new Date().toLocaleTimeString('en-IN', { hour12: false }),
-    mode:      isConfigured() ? 'ai' : 'demo',
+    mode:      'ai',
   };
 }
 
@@ -111,17 +109,6 @@ function Message({ msg }) {
   );
 }
 
-// ── Demo banner ───────────────────────────────────────────────────────────────
-function DemoBanner({ onGoToSettings }) {
-  return (
-    <div className="mx-4 mb-2 flex items-center gap-2 bg-amber-500/[0.08] border border-amber-500/30 rounded-lg px-3 py-2 text-[11px] text-amber-300">
-      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-      <span className="flex-1">Demo mode — showing static responses. Configure your API key to enable live AI.</span>
-      <button onClick={onGoToSettings} className="shrink-0 font-bold hover:text-white transition-colors underline">Settings →</button>
-    </div>
-  );
-}
-
 // ── Main Chatbot page ─────────────────────────────────────────────────────────
 export default function Chatbot() {
   // ── Session state ─────────────────────────────────────────────────────────
@@ -158,11 +145,15 @@ export default function Chatbot() {
   const [isThinking,   setIsThinking]   = useState(false);
   const [, setError]                    = useState(null);
   const [chatDoc,      setChatDoc]      = useState(null);
-  const [docUploading, setDocUploading] = useState(false);
-  const [docError,     setDocError]     = useState(null);
+  const [userDocs,     setUserDocs]     = useState([]);
   const endRef      = useRef(null);
-  const docFileRef  = useRef(null);
-  const navigate    = useNavigate();
+
+  useEffect(() => {
+    const load = () => listUserDocs().then(setUserDocs).catch(() => setUserDocs([]));
+    load();
+    window.addEventListener('docstore:changed', load);
+    return () => window.removeEventListener('docstore:changed', load);
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -218,20 +209,24 @@ export default function Chatbot() {
     });
   };
 
-  // ── Document upload for chat reference ───────────────────────────────────
-  const handleDocUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = '';
-    setDocUploading(true);
-    setDocError(null);
-    try {
-      const result = await extractChatDoc(file);
-      setChatDoc({ name: result.docName, text: result.text, suggestions: result.suggestions || [] });
-    } catch (err) {
-      setDocError(err.message);
-    }
-    setDocUploading(false);
+  // ── Reference document selection (from the user's uploaded documents) ────
+  const handleDocSelect = async (id) => {
+    if (!id) { setChatDoc(null); return; }
+    const d = await getUserDoc(id);
+    if (!d) return;
+    setChatDoc({
+      id: d.id,
+      name: d.name,
+      text: d.text,
+      suggestions: [
+        `Summarise the key requirements in ${d.name}.`,
+        `What compliance risks or gaps stand out in ${d.name}?`,
+        `List the technical specifications stated in ${d.name}.`,
+        `Cross-reference ${d.name} against applicable Class and IMO rules.`,
+        `What clarifications should we seek based on ${d.name}?`,
+        `Identify any inconsistencies or ambiguities in ${d.name}.`,
+      ],
+    });
   };
 
   // ── Send message ──────────────────────────────────────────────────────────
@@ -271,46 +266,31 @@ export default function Chatbot() {
     setIsThinking(true);
     const startTime = Date.now();
 
-    if (isConfigured()) {
-      try {
-        const history = [...currentMsgs, userMsg]
-          .filter(m => !m.isWelcome)
-          .map(m => ({ role: m.role, content: m.content }));
+    try {
+      const history = [...currentMsgs, userMsg]
+        .filter(m => !m.isWelcome)
+        .map(m => ({ role: m.role, content: m.content }));
 
-        const resp = await chat(history, domain === 'All' ? undefined : domain, chatDoc?.text, chatDoc?.name);
+      const resp = await chat(history, domain === 'All' ? undefined : domain, chatDoc?.text, chatDoc?.name);
 
-        appendToSession(sessionId, {
-          id:          'a' + Date.now(),
-          role:        'assistant',
-          content:     resp.content,
-          citations:   resp.citations   || [],
-          contextUsed: resp.contextUsed || 0,
-          timestamp:   new Date().toLocaleTimeString('en-IN', { hour12: false }),
-          latencyMs:   Date.now() - startTime,
-          mode:        'ai',
-        });
-      } catch (e) {
-        setError(e.message);
-        appendToSession(sessionId, {
-          id:        'err' + Date.now(),
-          role:      'assistant',
-          content:   `⚠ Error: ${e.message}\n\nCheck your API key in Settings or ensure the backend server is running (npm run dev).`,
-          timestamp: new Date().toLocaleTimeString('en-IN', { hour12: false }),
-          mode:      'error',
-        });
-      }
-    } else {
-      const lat = 700 + Math.floor(Math.random() * 600);
-      await new Promise(r => setTimeout(r, lat));
-      const resp = generateResponse(q);
       appendToSession(sessionId, {
-        id:        'a' + Date.now(),
+        id:          'a' + Date.now(),
+        role:        'assistant',
+        content:     resp.content,
+        citations:   resp.citations   || [],
+        contextUsed: resp.contextUsed || 0,
+        timestamp:   new Date().toLocaleTimeString('en-IN', { hour12: false }),
+        latencyMs:   Date.now() - startTime,
+        mode:        'ai',
+      });
+    } catch (e) {
+      setError(e.message);
+      appendToSession(sessionId, {
+        id:        'err' + Date.now(),
         role:      'assistant',
-        content:   resp.summary,
-        citations: resp.citations || [],
+        content:   `⚠ Error: ${e.message}\n\nPlease try again in a moment.`,
         timestamp: new Date().toLocaleTimeString('en-IN', { hour12: false }),
-        latencyMs: lat,
-        mode:      'demo',
+        mode:      'error',
       });
     }
 
@@ -318,7 +298,6 @@ export default function Chatbot() {
   };
 
   const onKey  = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } };
-  const aiMode = isConfigured();
 
   return (
     <div className="h-full flex gap-3">
@@ -442,13 +421,11 @@ export default function Chatbot() {
               </div>
             </div>
           </div>
-          <span className={`flex items-center gap-1 text-[10px] ${aiMode ? 'text-emerald-400' : 'text-amber-400'}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${aiMode ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-            {aiMode ? 'AI online' : 'Demo mode'}
+          <span className="flex items-center gap-1 text-[10px] text-emerald-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            AI online
           </span>
         </div>
-
-        {!aiMode && <DemoBanner onGoToSettings={() => navigate('/settings')} />}
 
         {/* Chat scroll area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -475,10 +452,7 @@ export default function Chatbot() {
               onChange={e => setInput(e.target.value)}
               onKeyDown={onKey}
               rows={1}
-              placeholder={aiMode
-                ? "Ask about a rule, validate a spec, generate documentation, run a calculation…"
-                : "Demo mode — configure API key in Settings for live responses…"
-              }
+              placeholder="Ask about a rule, validate a spec, generate documentation, run a calculation…"
               className="flex-1 bg-transparent text-[13px] text-slate-200 placeholder-slate-500 outline-none resize-none max-h-32 py-1"
             />
             <button
@@ -499,55 +473,44 @@ export default function Chatbot() {
       {/* ── Right sidebar ────────────────────────────────────────────────── */}
       <aside className="w-72 shrink-0 flex flex-col gap-3 overflow-y-auto">
 
-        {/* Reference document upload */}
+        {/* Reference document picker */}
         <div className="bg-app-panel border border-app-border rounded-xl p-3">
           <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Reference Document</div>
-          <input ref={docFileRef} type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.gif,.webp,.bmp" className="hidden" onChange={handleDocUpload} />
-          {chatDoc ? (
-            <div>
-              <div className="flex items-start gap-2 bg-emerald-500/[0.06] border border-emerald-500/30 rounded-lg p-2 mb-2">
-                <svg className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-semibold text-emerald-300 truncate">{chatDoc.name}</div>
-                  <div className="text-[10px] text-slate-500">{Math.ceil(chatDoc.text.length / 1000)}K chars · active as context</div>
-                </div>
-                <button
-                  onClick={() => { setChatDoc(null); setDocError(null); }}
-                  className="shrink-0 text-slate-500 hover:text-red-400 transition-colors"
-                  title="Remove document"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <button
-                onClick={() => docFileRef.current?.click()}
-                disabled={docUploading}
-                className="w-full text-[10px] text-slate-500 hover:text-sky-400 transition-colors py-1 text-center"
-              >
-                Replace document
-              </button>
-            </div>
+          {userDocs.length === 0 ? (
+            <p className="text-[10px] text-slate-600 leading-relaxed">
+              No documents yet. Upload one on the <span className="text-sky-400">Documents</span> page, then select it here to use as conversation context.
+            </p>
           ) : (
-            <div>
-              <button
-                onClick={() => docFileRef.current?.click()}
-                disabled={docUploading}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors disabled:opacity-50"
+            <>
+              <select
+                value={chatDoc?.id || ''}
+                onChange={(e) => handleDocSelect(e.target.value)}
+                className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200"
               >
-                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                {docUploading ? 'Processing document…' : 'Upload reference document'}
-              </button>
-              {docError && (
-                <div className="mt-1.5 text-[10px] text-red-400 leading-snug">{docError}</div>
+                <option value="">No reference document</option>
+                {userDocs.map(d => <option key={d.id} value={d.id}>{d.name} · {d.type}</option>)}
+              </select>
+              {chatDoc && (
+                <div className="flex items-start gap-2 bg-emerald-500/[0.06] border border-emerald-500/30 rounded-lg p-2 mt-2">
+                  <svg className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] font-semibold text-emerald-300 truncate">{chatDoc.name}</div>
+                    <div className="text-[10px] text-slate-500">{Math.ceil((chatDoc.text?.length || 0) / 1000)}K chars · active as context</div>
+                  </div>
+                  <button
+                    onClick={() => setChatDoc(null)}
+                    className="shrink-0 text-slate-500 hover:text-red-400 transition-colors"
+                    title="Remove reference"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               )}
-              <p className="text-[10px] text-slate-600 mt-1.5 leading-relaxed">Upload a PDF, DOCX, or image. The document text becomes active context for this conversation and generates relevant prompt suggestions.</p>
-            </div>
+            </>
           )}
         </div>
 
@@ -569,7 +532,7 @@ export default function Chatbot() {
             </div>
           ) : (
             <div className="text-[10px] text-slate-600 leading-relaxed">
-              Upload a reference document above to see document-specific prompt suggestions.
+              Select a reference document above to see document-specific prompt suggestions.
             </div>
           )}
         </div>

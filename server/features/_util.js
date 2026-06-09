@@ -17,7 +17,10 @@ function resolveDocText({ id, text, name }, label = 'document') {
       return { name: name || meta?.name || id, text: t };
     }
   }
-  throw new Error(`No ${label} provided (need uploaded text or a knowledge-base document id).`);
+  // Missing required input is a client error, not a server fault.
+  const err = new Error(`No ${label} provided. Please select an uploaded document.`);
+  err.status = 400;
+  throw err;
 }
 
 /** Run an async mapper over items with bounded concurrency, preserving order. */

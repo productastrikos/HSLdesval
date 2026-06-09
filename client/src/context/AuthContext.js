@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { clearUserDocs } from '../services/docStore';
 
 const AuthContext = createContext(null);
 
@@ -20,6 +21,7 @@ export function AuthProvider({ children }) {
     const handler = () => {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
+      clearUserDocs();
       setUser(null);
     };
     window.addEventListener('auth:logout', handler);
@@ -27,13 +29,18 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (username, password) => {
-    const res  = await fetch('/api/auth/login', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ username, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Login failed');
+    let res;
+    try {
+      res = await fetch('/api/auth/login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ username, password }),
+      });
+    } catch (_) {
+      throw new Error('Cannot reach the server. Please check that the application is running.');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Login failed. Please try again.');
     localStorage.setItem('auth_token', data.token);
     localStorage.setItem('auth_user',  JSON.stringify(data.user));
     setUser(data.user);
@@ -43,6 +50,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
+    clearUserDocs();   // uploaded documents live only for the duration of the session
     setUser(null);
   };
 

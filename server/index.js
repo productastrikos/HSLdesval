@@ -2,7 +2,8 @@
 // HSL Design Validator — Express API Server
 // ─────────────────────────────────────────────────────────────────────────────
 
-require('dotenv').config({ path: require('path').join(__dirname, '.env') });
+require('dotenv').config({ path: require('path').join(__dirname, '.env'), quiet: true });
+require('./lib/quietLogs');   // drop unactionable third-party PDF font warnings
 
 const express = require('express');
 const cors    = require('cors');
@@ -14,24 +15,64 @@ const bcrypt  = require('bcryptjs');
 const { sign, authenticate, requireAdmin } = require('./auth/middleware');
 const userStore = require('./auth/users');
 
-if (!process.env.GEMINI_API_KEY) {
-  console.error('[FATAL] GEMINI_API_KEY is not set. Add it to server/.env');
+if (!process.env.LLM_API_KEY) {
+  console.error('[FATAL] LLM_API_KEY is not set. Add it to server/.env');
   process.exit(1);
 }
 
-// Shared AI + document helpers (single source of truth, reused by feature modules)
-const { getModel: getGeminiModel } = require('./lib/llm');
+// Shared inference + document helpers (single source of truth, reused by feature modules)
+const { getModel, generateText }   = require('./lib/llm');
 const { extractFileText }          = require('./lib/extract');
 const { buildWorkbook }            = require('./lib/excel');
+
+// ── Automatic document-type classification ────────────────────────────────────
+// The upload page never asks the user what kind of document they are uploading;
+// we infer it from the content. Heuristics first (fast, deterministic), with an
+// inference fallback for anything ambiguous.
+const DOC_TYPES = [
+  'SOTR', 'POTS', 'Technical Offer', 'Binding Data', 'Compliance Matrix',
+  'Inspection Report', 'Drawing', 'Build Specification', 'RFP / Tender', 'General Document',
+];
+
+function heuristicDocType(text, name = '') {
+  const s = `${name}\n${text.slice(0, 4000)}`.toLowerCase();
+  if (/\bpots\b|purchase order technical spec/.test(s))            return 'POTS';
+  if (/\bsotr\b|statement of technical requirement/.test(s))       return 'SOTR';
+  if (/compliance matrix|clause[- ]?by[- ]?clause/.test(s))        return 'Compliance Matrix';
+  if (/technical offer|vendor offer|bid offer|quotation/.test(s))  return 'Technical Offer';
+  if (/binding data|data sheet|datasheet|guaranteed (data|particulars)/.test(s)) return 'Binding Data';
+  if (/inspection report|non[- ]?conformit|ncr\b|observation/.test(s)) return 'Inspection Report';
+  if (/cable schedule|single line diagram|\bsld\b|drawing no|drg\.? no/.test(s)) return 'Drawing';
+  if (/build specification|building specification/.test(s))        return 'Build Specification';
+  if (/request for proposal|\brfp\b|tender|invitation to bid/.test(s)) return 'RFP / Tender';
+  return null;
+}
+
+async function classifyDocType(text, name = '') {
+  const h = heuristicDocType(text, name);
+  if (h) return h;
+  try {
+    const prompt = `Classify the following document into EXACTLY ONE of these categories:
+${DOC_TYPES.map(t => `- ${t}`).join('\n')}
+
+Reply with ONLY the category name, nothing else.
+
+Document name: ${name}
+Document excerpt:
+${text.slice(0, 3000)}`;
+    const out = (await generateText(prompt, { temperature: 0, maxOutputTokens: 20 })).trim();
+    const match = DOC_TYPES.find(t => out.toLowerCase().includes(t.toLowerCase()));
+    return match || 'General Document';
+  } catch (_) {
+    return 'General Document';
+  }
+}
 
 const app    = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-
-// Document types that only administrators may upload
-const COMPLIANCE_DOC_TYPES = new Set(['Class Rule', 'IACS', 'IMO', 'IEC', 'Naval', 'Build Spec']);
 
 // ── Boot: initialise knowledge base (async, non-blocking) ─────────────────────
 rag.initializeKnowledgeBase()
@@ -109,7 +150,7 @@ app.post('/api/auth/login', (req, res) => {
     });
   } catch (err) {
     console.error('[/api/auth/login]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -204,9 +245,9 @@ app.post('/api/chat', authenticate, async (req, res) => {
     const allMessages = messages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (!allMessages.length) return res.status(400).json({ error: 'No messages provided' });
 
-    const model = getGeminiModel(buildSystemPrompt(context, domain, 'chat', chatDocText, chatDocName));
+    const model = getModel(buildSystemPrompt(context, domain, 'chat', chatDocText, chatDocName));
 
-    // Convert prior turns into Gemini history (all but the last user message)
+    // Convert prior turns into chat history (all but the last user message)
     const history = allMessages.slice(0, -1).map(m => ({
       role:  m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }],
@@ -223,7 +264,7 @@ app.post('/api/chat', authenticate, async (req, res) => {
     res.json({ content, citations, contextUsed: context.length, contextDetails: ctxDetails });
   } catch (err) {
     console.error('[/api/chat]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -232,13 +273,15 @@ app.post('/api/chat', authenticate, async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/validate', authenticate, async (req, res) => {
   try {
-    const { specId, domain, additionalContext } = req.body;
+    const { specId, specName, domain, additionalContext } = req.body;
+    let { specText } = req.body;
 
-    // Try to use actual spec text for more targeted retrieval
-    const specText  = rag.getDocText(specId) || '';
+    // Spec text comes from the browser-held document; fall back to RAG by id.
+    if (!specText) specText = rag.getDocText(specId) || '';
+    const specLabel = specName || specId || 'uploaded document';
     const specQuery = specText
       ? specText.slice(0, 600)
-      : `${specId} ${domain} build specification compliance check requirements`;
+      : `${specLabel} ${domain} build specification compliance check requirements`;
 
     const [rules, specCtx] = await Promise.all([
       rag.retrieveForDomain(domain, 10),
@@ -247,10 +290,10 @@ app.post('/api/validate', authenticate, async (req, res) => {
 
     const allContext = dedupeContext([...rules, ...specCtx]).slice(0, 12);
 
-    const prompt = `Perform a compliance validation scan for Build Specification: ${specId}
+    const prompt = `Perform a compliance validation scan for: ${specLabel}
 Domain: ${domain}
 ${additionalContext ? `Additional Context: ${additionalContext}` : ''}
-
+${specText ? `\nDocument under review (excerpt):\n${specText.slice(0, 5000)}\n` : ''}
 Applicable rules and standards (from knowledge base):
 ${allContext.map(c => {
   const sec = c.section ? ` [${c.section}]` : '';
@@ -270,7 +313,7 @@ Each finding must have exactly these fields:
 
 Return 4–8 findings covering different rule areas. Reference specific clause numbers where possible.`;
 
-    const model  = getGeminiModel();
+    const model  = getModel();
     const result = await model.generateContent(prompt);
     const text   = result.response.text();
 
@@ -283,7 +326,7 @@ Return 4–8 findings covering different rule areas. Reference specific clause n
     res.json({ findings, rawAnalysis: text });
   } catch (err) {
     console.error('[/api/validate]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -334,7 +377,7 @@ Each difference must have:
 
 Return 5–12 differences covering structural, numerical, and textual changes.`;
 
-    const model  = getGeminiModel();
+    const model  = getModel();
     const result = await model.generateContent(prompt);
     const text   = result.response.text();
 
@@ -347,7 +390,7 @@ Return 5–12 differences covering structural, numerical, and textual changes.`;
     res.json({ diff, rawAnalysis: text });
   } catch (err) {
     console.error('[/api/compare]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -358,47 +401,35 @@ app.post('/api/upload', authenticate, upload.single('file'), async (req, res) =>
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
 
-    const { docType, docName } = req.body;
-    const type = docType || 'Upload';
-
-    // Compliance documents require admin role
-    if (COMPLIANCE_DOC_TYPES.has(type) && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only administrators can upload compliance / guardrail documents.' });
-    }
-
-    const name = docName || req.file.originalname;
+    const name = req.body.docName || req.file.originalname;
     const mime = req.file.mimetype;
 
+    // Extract text — pages without a text layer are read by the vision model.
     const text = await extractFileText(req.file.buffer, mime, req.file.originalname);
 
     if (!text.trim()) {
-      return res.status(422).json({ error: 'Could not extract text from file.' });
+      return res.status(422).json({ error: 'Could not read this file. It may be empty, password-protected, or a corrupted/incomplete PDF.' });
     }
 
-    const docId       = 'DOC-' + Date.now();
-    const docCategory = COMPLIANCE_DOC_TYPES.has(type) ? 'compliance' : 'vendor';
+    // The page never asks for a type — infer it from the content.
+    const type = await classifyDocType(text, name);
 
-    const chunks = await rag.addDocument({
-      id:             docId,
-      name,
-      type,
-      text,
-      uploadedBy:     req.user.username,
-      uploadedByRole: req.user.role,
-      docCategory,
-    });
+    const docId = 'DOC-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
 
+    // The document is NOT indexed server-side: it is returned to the browser,
+    // which persists it locally (until logout) and supplies it to features.
     res.json({
       docId,
       name,
       type,
+      mime,
       pages:      Math.ceil(text.length / 3000),
-      chunks,
       textLength: text.length,
+      text,
     });
   } catch (err) {
     console.error('[/api/upload]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -455,7 +486,7 @@ app.post('/api/convert', authenticate, upload.single('file'), async (req, res) =
     return res.send(text);
   } catch (err) {
     console.error('[/api/convert]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -470,7 +501,7 @@ app.get('/api/retrieve', authenticate, async (req, res) => {
     res.json({ query: q, domain: domain || null, count: results.length, results });
   } catch (err) {
     console.error('[/api/retrieve]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -483,9 +514,24 @@ app.get('/api/kb-status', authenticate, (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DOCUMENTS LIST  GET /api/documents
+// The pre-loaded knowledge-base documents are internal to the AI/RAG engine and
+// are never exposed to the application. Only user-supplied documents are listed.
 // ─────────────────────────────────────────────────────────────────────────────
 app.get('/api/documents', authenticate, (req, res) => {
-  res.json(rag.getAllDocs());
+  res.json(rag.getAllDocs().filter(d => d.uploadedBy !== 'system'));
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BASE KNOWLEDGE  GET /api/base-knowledge
+// Returns the parsed text of the built-in knowledge-base documents so the client
+// can cache them locally (persisted across sessions). These are used only to
+// ground the AI/RAG engine and are never rendered in the UI.
+// ─────────────────────────────────────────────────────────────────────────────
+app.get('/api/base-knowledge', authenticate, (req, res) => {
+  const docs = rag.getAllDocs()
+    .filter(d => d.uploadedBy === 'system')
+    .map(d => ({ id: d.id, name: d.name, text: rag.getDocText(d.id) || '' }));
+  res.json({ docs, ready: rag.getStatus().ready });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -510,7 +556,7 @@ app.delete('/api/documents/:id', authenticate, (req, res) => {
     res.json({ success: true, id });
   } catch (err) {
     console.error('[DELETE /api/documents/:id]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -532,7 +578,7 @@ app.post('/api/chat-extract', authenticate, upload.single('file'), async (req, r
       return res.status(422).json({ error: 'Could not extract text from file.' });
     }
 
-    // Generate document-specific suggestions using Gemini
+    // Generate document-specific suggestions using the local inference engine
     const docSample = text.slice(0, 6000);
     const suggestionsPrompt = `Based on the following document content, generate exactly 6 specific and relevant questions or instructions that an engineer would want to ask about this document. Each prompt must be specific to the actual content of this document — not generic.
 
@@ -543,7 +589,7 @@ Return ONLY a JSON array of 6 strings — no other text, no numbering, no bullet
 
 Example format: ["Specific question about document content 1", "Specific question about document content 2"]`;
 
-    const model    = getGeminiModel();
+    const model    = getModel();
     const result   = await model.generateContent(suggestionsPrompt);
     const rawText  = result.response.text();
 
@@ -562,7 +608,7 @@ Example format: ["Specific question about document content 1", "Specific questio
     });
   } catch (err) {
     console.error('[/api/chat-extract]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -579,7 +625,7 @@ app.post('/api/extract-text', authenticate, upload.single('file'), async (req, r
     res.json({ name: req.file.originalname, textLength: text.length, text });
   } catch (err) {
     console.error('[/api/extract-text]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -599,7 +645,7 @@ app.post('/api/export/xlsx', authenticate, (req, res) => {
     res.send(buf);
   } catch (err) {
     console.error('[/api/export/xlsx]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 
@@ -622,18 +668,68 @@ app.use('/api/prebid',       authenticate, require('./features/prebid'));
 app.use('/api/designreview', authenticate, require('./features/designreview'));
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Unknown API endpoint → JSON 404 (must precede the SPA catch-all so unmatched
+// /api/* requests never fall through to index.html).
+// ─────────────────────────────────────────────────────────────────────────────
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: `Unknown API endpoint: ${req.method} ${req.originalUrl}` });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Serve React build in production
 // ─────────────────────────────────────────────────────────────────────────────
 const buildDir = path.join(__dirname, '../client/build');
 if (fs.existsSync(buildDir)) {
   app.use(express.static(buildDir));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(buildDir, 'index.html'));
+  app.get('*', (req, res, next) => {
+    res.sendFile(path.join(buildDir, 'index.html'), err => { if (err) next(err); });
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Centralised error handler (last middleware). Converts upload-size limits,
+// malformed/oversized JSON and any uncaught route error into a consistent JSON
+// response. Internal details are logged server-side only; clients get a safe,
+// actionable message.
+// ─────────────────────────────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+
+  if (err && err.name === 'MulterError') {
+    const msg = err.code === 'LIMIT_FILE_SIZE'
+      ? 'The file is too large. The maximum upload size is 200 MB.'
+      : `File upload error: ${err.message}`;
+    return res.status(413).json({ error: msg });
+  }
+  if (err && err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Request body is not valid JSON.' });
+  }
+  if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+    return res.status(413).json({ error: 'Request body is too large.' });
+  }
+
+  console.error('[unhandled]', req.method, req.originalUrl, '—', err && err.stack ? err.stack : err);
+  res.status(err.status || 500).json({ error: 'An unexpected server error occurred. Please try again.' });
+});
+
+// ── Process-level safety nets — log instead of crashing silently ──────────────
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason && reason.stack ? reason.stack : reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err && err.stack ? err.stack : err);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[HSL Validator API] http://localhost:${PORT}`);
+});
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[FATAL] Port ${PORT} is already in use. Stop the other process (or set a different PORT) and restart.`);
+    process.exit(1);
+  }
+  console.error('[server error]', err.stack || err.message);
+  process.exit(1);
 });

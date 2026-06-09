@@ -1,6 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, Field, Spinner } from '../components/feature/FeatureKit';
 import { extractDrawing } from '../services/featureApi';
+import { listUserDocs, getUserDoc } from '../services/docStore';
 
 const PRESETS = {
   'Cable Schedule': {
@@ -22,11 +23,18 @@ export default function DrawingExtract() {
   const [preset, setPreset]   = useState('Cable Schedule');
   const [prompt, setPrompt]   = useState(PRESETS['Cable Schedule'].prompt);
   const [colText, setColText] = useState(PRESETS['Cable Schedule'].columns.join(', '));
-  const [file, setFile]       = useState(null);
+  const [docs, setDocs]       = useState([]);
+  const [docId, setDocId]     = useState('');
   const [busy, setBusy]       = useState(false);
   const [error, setError]     = useState(null);
   const [result, setResult]   = useState(null);
-  const fileRef = useRef(null);
+
+  useEffect(() => {
+    const load = () => listUserDocs().then(setDocs).catch(() => setDocs([]));
+    load();
+    window.addEventListener('docstore:changed', load);
+    return () => window.removeEventListener('docstore:changed', load);
+  }, []);
 
   const applyPreset = (p) => {
     setPreset(p);
@@ -35,9 +43,12 @@ export default function DrawingExtract() {
   };
 
   const run = async () => {
-    if (!file) { setError('Select a drawing file first.'); return; }
+    if (!docId) { setError('Select an uploaded drawing first.'); return; }
     setBusy(true); setError(null); setResult(null);
     try {
+      const doc = await getUserDoc(docId);
+      if (!doc?.file) { setError('The selected document has no original file to read.'); setBusy(false); return; }
+      const file = new File([doc.file], doc.name || 'drawing', { type: doc.mime || doc.file.type || 'application/pdf' });
       const columns = colText.split(/[,\n;]+/).map(s => s.trim()).filter(Boolean);
       const res = await extractDrawing(file, prompt, columns.length ? columns : null);
       setResult(res);
@@ -48,22 +59,32 @@ export default function DrawingExtract() {
 
   const tb = result?.meta?.titleBlock || {};
   const cableLegend = result?.legend?.cableLegend || [];
+  const selectedDoc = docs.find(d => d.id === docId);
 
   return (
     <Page
       title="Drawing Data Extraction"
       subtitle="Intelligently read engineering drawings (PDF / scanned PDF / image) — cable tags, equipment tags, legends and symbols — and extract the data you ask for into Excel. Multi-page drawings are read sheet-by-sheet with the legend resolved as context."
     >
-      <Card title="1 · Drawing & Extraction Request" desc="Upload a drawing, choose what to extract, and refine the target columns.">
+      <Card title="1 · Drawing & Extraction Request" desc="Pick a drawing you uploaded on the Documents page, choose what to extract, and refine the target columns.">
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-3">
-            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tiff" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setResult(null); setError(null); } }} />
-            <button onClick={() => fileRef.current?.click()}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-              <span className="truncate">{file ? file.name : 'Select drawing (PDF / scanned PDF / image)…'}</span>
-            </button>
+            <label className="text-[11px] font-semibold text-slate-300">Drawing</label>
+            {docs.length === 0 ? (
+              <div className="text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700">
+                No documents yet — upload a drawing on the <span className="text-sky-400">Documents</span> page.
+              </div>
+            ) : (
+              <select
+                value={docId}
+                onChange={(e) => { setDocId(e.target.value); setResult(null); setError(null); }}
+                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-[11px] text-slate-200"
+              >
+                <option value="">Select an uploaded drawing…</option>
+                {docs.map(d => <option key={d.id} value={d.id}>{d.name} · {d.type}</option>)}
+              </select>
+            )}
+            {selectedDoc && <div className="text-[10px] text-emerald-400">✓ {selectedDoc.name}</div>}
             <div>
               <label className="text-[11px] font-semibold text-slate-300">Extraction preset</label>
               <div className="flex flex-wrap gap-1.5 mt-1">
@@ -114,7 +135,7 @@ export default function DrawingExtract() {
               rows={result.rows}
               title={preset === 'Custom' ? 'Extracted data' : preset}
               sheetName={(preset === 'Custom' ? 'Extract' : preset).slice(0, 28)}
-              downloadName={`${(tb.drawingNo || file?.name || 'drawing').toString().replace(/\.[^.]+$/, '')}_${preset.replace(/[^a-z0-9]+/gi, '_')}`}
+              downloadName={`${(tb.drawingNo || selectedDoc?.name || 'drawing').toString().replace(/\.[^.]+$/, '')}_${preset.replace(/[^a-z0-9]+/gi, '_')}`}
               note="Verify against the source drawing before issue. Empty cells indicate data not legible/!shown on the sheet."
             />
           </Card>

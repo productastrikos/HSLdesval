@@ -12,22 +12,32 @@ function authHeaders(extra = {}) {
   return { ...extra, ...(t ? { Authorization: `Bearer ${t}` } : {}) };
 }
 
+// Network-safe fetch — converts a rejected fetch (server down / offline) into a
+// clear, actionable error instead of an opaque "Failed to fetch".
+async function netFetch(url, opts) {
+  try {
+    return await fetch(url, opts);
+  } catch (_) {
+    throw new Error('Cannot reach the server. Please check your connection and that the application is running.');
+  }
+}
+
 async function handle(res) {
   if (res.status === 401) {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     window.dispatchEvent(new Event('auth:logout'));
-    throw new Error('Session expired — please sign in again');
+    throw new Error('Session expired — please sign in again.');
   }
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-    throw new Error(body.error || `HTTP ${res.status}`);
+    const body = await res.json().catch(() => ({ error: `Request failed (HTTP ${res.status}).` }));
+    throw new Error(body.error || `Request failed (HTTP ${res.status}).`);
   }
-  return res.json();
+  return res.json().catch(() => ({}));
 }
 
 async function postJSON(path, body) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await netFetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(body),
@@ -36,12 +46,12 @@ async function postJSON(path, body) {
 }
 
 async function postForm(path, form) {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers: authHeaders(), body: form });
+  const res = await netFetch(`${API_BASE}${path}`, { method: 'POST', headers: authHeaders(), body: form });
   return handle(res);
 }
 
 async function getJSON(path) {
-  const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+  const res = await netFetch(`${API_BASE}${path}`, { headers: authHeaders() });
   return handle(res);
 }
 
@@ -54,14 +64,14 @@ export async function extractText(file) {
 
 // ── Shared: build + download an Excel workbook from sheet specs ───────────────
 export async function downloadXlsx(sheets, filename = 'export') {
-  const res = await fetch(`${API_BASE}/export/xlsx`, {
+  const res = await netFetch(`${API_BASE}/export/xlsx`, {
     method: 'POST',
     headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ sheets, filename }),
   });
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-    throw new Error(body.error || `HTTP ${res.status}`);
+    const body = await res.json().catch(() => ({ error: `Request failed (HTTP ${res.status}).` }));
+    throw new Error(body.error || `Request failed (HTTP ${res.status}).`);
   }
   const blob = await res.blob();
   const url  = URL.createObjectURL(blob);
@@ -101,7 +111,7 @@ export async function listLessons({ q = '', category = '', system = '', project 
 }
 export async function addLesson(data)    { return postJSON('/lessons', data); }
 export async function deleteLesson(id)    {
-  const res = await fetch(`${API_BASE}/lessons/${id}`, { method: 'DELETE', headers: authHeaders() });
+  const res = await netFetch(`${API_BASE}/lessons/${id}`, { method: 'DELETE', headers: authHeaders() });
   return handle(res);
 }
 export async function suggestLessons({ system, domain, query }) {
@@ -121,10 +131,11 @@ export async function prebidQueries(body)     { return postJSON('/prebid/queries
 export async function designReview(body)      { return postJSON('/designreview/checklist', body); }
 
 // Convert a DocSource value into request body fields, e.g. docFields('tts', v)
-// → { ttsId } or { ttsText, ttsName }
+// → { ttsText, ttsName }. Uploaded documents are held in the browser, so their
+// text is sent directly; an id is only a fallback for server-side references.
 export function docFields(prefix, v) {
   if (!v) return {};
-  if (v.id)   return { [`${prefix}Id`]: v.id, [`${prefix}Name`]: v.name };
   if (v.text) return { [`${prefix}Text`]: v.text, [`${prefix}Name`]: v.name };
+  if (v.id)   return { [`${prefix}Id`]: v.id, [`${prefix}Name`]: v.name };
   return {};
 }

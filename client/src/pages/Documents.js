@@ -1,34 +1,20 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { compareDocs } from '../services/hslKnowledge';
-import { uploadDocument, compareByIds, listDocuments, validate, isConfigured, deleteDocument } from '../services/aiService';
-import { useAuth } from '../context/AuthContext';
+import { uploadDocument, compareByText, validate } from '../services/aiService';
+import { listUserDocs, getUserDoc, addUserDoc, removeUserDoc } from '../services/docStore';
 
 // ── Document type styles ──────────────────────────────────────────────────────
 const TYPE_COLOR = {
-  // Knowledge-base (compliance) types — static, not user-uploadable
-  'Class Rule':      'bg-sky-500/15 text-sky-300 border-sky-500/30',
-  'IACS':            'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
-  'IMO':             'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  'IEC':             'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  'Naval':           'bg-red-500/15 text-red-300 border-red-500/30',
-  'Build Spec':      'bg-violet-500/15 text-violet-300 border-violet-500/30',
-  // User-uploadable document types
-  'SOTR':            'bg-orange-500/15 text-orange-300 border-orange-500/30',
-  'Technical Offer': 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
-  'Binding Data':    'bg-teal-500/15 text-teal-300 border-teal-500/30',
+  'SOTR':              'bg-orange-500/15 text-orange-300 border-orange-500/30',
+  'POTS':              'bg-pink-500/15 text-pink-300 border-pink-500/30',
+  'Technical Offer':   'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
+  'Binding Data':      'bg-teal-500/15 text-teal-300 border-teal-500/30',
+  'Compliance Matrix': 'bg-violet-500/15 text-violet-300 border-violet-500/30',
+  'Inspection Report': 'bg-red-500/15 text-red-300 border-red-500/30',
+  'Drawing':           'bg-sky-500/15 text-sky-300 border-sky-500/30',
+  'Build Specification':'bg-indigo-500/15 text-indigo-300 border-indigo-500/30',
+  'RFP / Tender':      'bg-amber-500/15 text-amber-300 border-amber-500/30',
+  'General Document':  'bg-slate-600/20 text-slate-300 border-slate-600/40',
 };
-
-// All 3 upload types are available to both admin and regular users
-const UPLOAD_DOC_TYPES = ['SOTR', 'Technical Offer', 'Binding Data'];
-const ADMIN_DOC_TYPES  = UPLOAD_DOC_TYPES;
-const USER_DOC_TYPES   = UPLOAD_DOC_TYPES;
-const COMPLIANCE_TYPES = new Set(['Class Rule', 'IACS', 'IMO', 'IEC', 'Naval', 'Build Spec']);
-
-// ── Validator helpers ─────────────────────────────────────────────────────────
-function staticFindingsFor() {
-  return [];
-}
 
 const SEV_STYLE = {
   critical: { txt:'text-red-400',    bg:'bg-red-500/15',    border:'border-red-500/30',    dot:'bg-red-500' },
@@ -51,83 +37,52 @@ function ProgressBar({ value, color = 'bg-sky-400' }) {
   );
 }
 
-function UploadCard({ onAdd, aiMode, userRole }) {
-  const TYPES = userRole === 'admin' ? ADMIN_DOC_TYPES : USER_DOC_TYPES;
-
+// The single place in the whole application where documents may be uploaded.
+// Type is detected automatically; the extracted content (image-only pages read
+// by the vision model) is stored in the browser for the rest of the session.
+function UploadCard({ onAdded }) {
   const [stage,    setStage]    = useState('idle');
   const [progress, setProgress] = useState(0);
   const [fileInfo, setFileInfo] = useState(null);
   const [error,    setError]    = useState(null);
-  const [docType,  setDocType]  = useState(TYPES[0]);
+  const [detected, setDetected] = useState(null);
   const fileRef = useRef(null);
 
   const start = async (file) => {
     setFileInfo({ name: file.name, size: file.size });
-    setError(null);
-
-    if (aiMode) {
-      setStage('reading'); setProgress(20);
-      try {
-        setStage('ocr'); setProgress(50);
-        const result = await uploadDocument(file, docType, file.name);
-        setStage('indexing'); setProgress(80);
-        await new Promise(r => setTimeout(r, 400));
-        setStage('done'); setProgress(100);
-        onAdd && onAdd({
-          id:         result.docId,
-          name:       result.name,
-          type:       result.type || docType,
-          pages:      result.pages || Math.ceil((result.textLength || 0) / 3000),
-          ocr:        file.name.match(/\.(jpg|jpeg|png|tiff?)$/i) ? true : false,
-          status:     'indexed',
-          confidence: 98.5,
-          backendId:  result.docId,
-        });
-      } catch (e) {
-        setError(e.message);
-        setStage('error');
-      }
-    } else {
-      const tick = (next, msFor, after) => {
-        const t0 = Date.now();
-        const itv = setInterval(() => {
-          const p = Math.min(100, ((Date.now() - t0) / msFor) * 100);
-          setProgress(Math.floor(p));
-          if (p >= 100) { clearInterval(itv); after && after(); }
-        }, 60);
-      };
-      setStage('reading'); setProgress(0);
-      tick(null, 800, () => {
-        setStage('ocr'); setProgress(0);
-        tick(null, 1400, () => {
-          setStage('indexing'); setProgress(0);
-          tick(null, 900, () => {
-            setStage('done'); setProgress(100);
-            onAdd && onAdd({
-              id:         'DOC-' + (1000 + Math.floor(Math.random() * 900)),
-              name:       file.name,
-              type:       docType,
-              pages:      Math.ceil(file.size / 4096) || 48,
-              ocr:        true,
-              status:     'indexed',
-              confidence: 97.6,
-            });
-          });
-        });
+    setError(null); setDetected(null);
+    try {
+      setStage('reading'); setProgress(25);
+      setStage('ocr'); setProgress(55);
+      const result = await uploadDocument(file);
+      setStage('indexing'); setProgress(85);
+      await addUserDoc({
+        id:         result.docId,
+        name:       result.name,
+        type:       result.type,
+        mime:       result.mime || file.type,
+        pages:      result.pages,
+        textLength: result.textLength,
+        text:       result.text,
+        file,                       // keep original for vision features (drawings)
       });
+      setDetected(result.type);
+      setStage('done'); setProgress(100);
+      onAdded && onAdded();
+    } catch (e) {
+      setError(e.message);
+      setStage('error');
     }
   };
 
-  const onPick = (e) => { const f = e.target.files?.[0]; if (f) start(f); };
+  const onPick = (e) => { const f = e.target.files?.[0]; if (f) start(f); e.target.value = ''; };
 
   const stageLabel = {
-    idle:     userRole === 'admin'
-      ? 'Drag a PDF, DOCX, or image here — or click to upload'
-      : 'Upload SOTR, Technical Offer, or Binding Data documents (PDF, DOCX)',
-    reading:  aiMode ? 'Reading file…' : 'Reading binary stream…',
-    ocr:      aiMode ? 'Extracting text (PDF parse / OCR)…' : 'Running offline OCR…',
-    indexing: aiMode ? 'Chunking and indexing into knowledge base…' : 'Generating embeddings and cross-references…',
-    done:     aiMode ? 'Document indexed and available for RAG' : 'Document indexed and ready for query',
+    idle:     'Drag a PDF, DOCX, or image here — or click to upload',
+    reading:  'Reading file…',
+    ocr:      'Extracting content (text layer + vision for scanned pages)…',
+    indexing: 'Saving to your workspace…',
+    done:     detected ? `Ready — detected as “${detected}”` : 'Ready',
     error:    'Upload failed',
   }[stage];
 
@@ -141,33 +96,8 @@ function UploadCard({ onAdd, aiMode, userRole }) {
           <button onClick={() => fileRef.current?.click()} className="w-full flex flex-col items-center gap-2 text-slate-400 hover:text-sky-300 transition-colors">
             <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
             <span className="text-sm font-semibold">{stageLabel}</span>
-            <span className="text-[11px] text-slate-500">PDF · DOCX · scanned images · CSV · up to 200 MB</span>
+            <span className="text-[11px] text-slate-500">The document type is detected automatically · PDF · DOCX · scanned images · CSV · up to 200 MB</span>
           </button>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold shrink-0">Document Type:</label>
-              <select
-                value={docType}
-                onChange={e => setDocType(e.target.value)}
-                className="text-[11px] px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-200 flex-1"
-              >
-                {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className={`text-[10px] px-2 py-1 rounded font-semibold border ${
-              docType === 'SOTR'
-                ? 'bg-orange-500/10 text-orange-300 border-orange-500/25'
-                : docType === 'Technical Offer'
-                ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/25'
-                : 'bg-teal-500/10 text-teal-300 border-teal-500/25'
-            }`}>
-              {docType === 'SOTR'
-                ? 'Statement of Technical Requirements — navy/authority requirements specification'
-                : docType === 'Technical Offer'
-                ? 'Technical Offer — vendor offer and compliance matrix'
-                : 'Binding Data — vendor-committed technical drawings and data sheets'}
-            </div>
-          </div>
         </div>
       )}
       {stage !== 'idle' && fileInfo && (
@@ -181,7 +111,7 @@ function UploadCard({ onAdd, aiMode, userRole }) {
               <div className="text-[10px] text-slate-500">{((fileInfo.size || 0) / 1024 / 1024).toFixed(2)} MB · {stageLabel}</div>
             </div>
             {stage === 'done' && (
-              <button onClick={() => { setStage('idle'); setError(null); setFileInfo(null); }} className="text-[10px] px-2 py-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Done · upload another</button>
+              <button onClick={() => { setStage('idle'); setError(null); setFileInfo(null); }} className="text-[10px] px-2 py-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Upload another</button>
             )}
             {stage === 'error' && (
               <button onClick={() => { setStage('idle'); setError(null); setFileInfo(null); }} className="text-[10px] px-2 py-1 rounded bg-red-500/15 text-red-400 border border-red-500/30">Dismiss</button>
@@ -198,7 +128,7 @@ function UploadCard({ onAdd, aiMode, userRole }) {
             {[
               { k:'reading',  l:'1. Read' },
               { k:'ocr',      l:'2. Extract' },
-              { k:'indexing', l:'3. Index' },
+              { k:'indexing', l:'3. Save' },
               { k:'done',     l:'4. Ready' },
             ].map(s => {
               const order = ['reading','ocr','indexing','done'];
@@ -242,14 +172,20 @@ function ConversionTool() {
       const form  = new FormData();
       form.append('file',   file);
       form.append('format', format);
-      const res = await fetch('/api/convert', {
-        method:  'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body:    form,
-      });
+      let res;
+      try {
+        res = await fetch('/api/convert', {
+          method:  'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body:    form,
+        });
+      } catch (_) {
+        throw new Error('Cannot reach the server. Please check that the application is running.');
+      }
+      if (res.status === 401) { window.dispatchEvent(new Event('auth:logout')); throw new Error('Session expired — please sign in again.'); }
       if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
-        throw new Error(body.error || `HTTP ${res.status}`);
+        const body = await res.json().catch(() => ({ error: `Request failed (HTTP ${res.status}).` }));
+        throw new Error(body.error || `Request failed (HTTP ${res.status}).`);
       }
       const blob     = await res.blob();
       const baseName = file.name.replace(/\.[^/.]+$/, '');
@@ -270,7 +206,7 @@ function ConversionTool() {
   return (
     <div className="bg-app-panel border border-app-border rounded-xl p-4">
       <h3 className="text-sm font-bold text-white mb-1">Convert PDF / Image → Editable Format</h3>
-      <p className="text-[11px] text-slate-400 mb-3">Extract text from a PDF, DOCX, or scanned image and download as Excel, plain text, or Word.</p>
+      <p className="text-[11px] text-slate-400 mb-3">Extract content from a PDF, DOCX, or scanned image and download as Excel, plain text, or Word.</p>
       <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.gif,.webp,.bmp" className="hidden" onChange={onPick} />
       <button
         onClick={() => fileRef.current?.click()}
@@ -314,7 +250,7 @@ function ConversionTool() {
   );
 }
 
-function ComparePanel({ allDocs, aiMode, navigate }) {
+function ComparePanel({ docs }) {
   const [docAId,  setDocAId]  = useState('');
   const [docBId,  setDocBId]  = useState('');
   const [diff,    setDiff]    = useState(null);
@@ -322,16 +258,13 @@ function ComparePanel({ allDocs, aiMode, navigate }) {
   const [error,   setError]   = useState(null);
 
   const run = async () => {
-    if (!aiMode) { setDiff(compareDocs()); return; }
     if (!docAId || !docBId) return;
     setLoading(true); setDiff(null); setError(null);
     try {
-      const result = await compareByIds(docAId, docBId);
-      if (result.diff && result.diff.length > 0) {
-        setDiff(result.diff);
-      } else {
-        setError('AI returned no structured diff. Try selecting documents with differing content.');
-      }
+      const [a, b] = await Promise.all([getUserDoc(docAId), getUserDoc(docBId)]);
+      const result = await compareByText(a?.text || '', b?.text || '', a?.name, b?.name);
+      if (result.diff && result.diff.length > 0) setDiff(result.diff);
+      else setError('No structured differences were found between these documents.');
     } catch (e) { setError(e.message); }
     setLoading(false);
   };
@@ -345,36 +278,33 @@ function ComparePanel({ allDocs, aiMode, navigate }) {
   return (
     <div className="bg-app-panel border border-app-border rounded-xl p-4">
       <h3 className="text-sm font-bold text-white mb-1">Document Comparison</h3>
-      <p className="text-[11px] text-slate-400 mb-3">
-        {aiMode
-          ? 'Select two documents from the KB — AI performs a detailed section-by-section diff'
-          : 'Demo comparison — HSL-BS-21-411 Rev.B vs Rev.C (static example)'
-        }
-      </p>
-      {aiMode && (
+      <p className="text-[11px] text-slate-400 mb-3">Select two uploaded documents — the assistant performs a detailed section-by-section diff.</p>
+      {docs.length < 2 ? (
+        <div className="text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700">Upload at least two documents to compare.</div>
+      ) : (
         <div className="space-y-2 mb-3">
           <div>
             <label className="text-[9px] uppercase tracking-widest text-slate-500 font-bold block mb-1">Document A</label>
             <select value={docAId} onChange={e => setDocAId(e.target.value)} className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200">
               <option value="">— select —</option>
-              {allDocs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
           </div>
           <div>
             <label className="text-[9px] uppercase tracking-widest text-slate-500 font-bold block mb-1">Document B</label>
             <select value={docBId} onChange={e => setDocBId(e.target.value)} className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200">
               <option value="">— select —</option>
-              {allDocs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
           </div>
         </div>
       )}
       <button
         onClick={run}
-        disabled={loading || (aiMode && (!docAId || !docBId))}
+        disabled={loading || !docAId || !docBId}
         className="w-full py-2 rounded-lg bg-gradient-to-r from-sky-500 to-violet-500 text-white text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
       >
-        {loading ? 'AI comparing…' : aiMode ? '✦ Compare with AI' : 'Run Demo Comparison'}
+        {loading ? 'Comparing…' : 'Compare Documents'}
       </button>
       {error && <div className="mt-2 text-[11px] text-red-400">⚠ {error}</div>}
       {diff && (
@@ -395,68 +325,48 @@ function ComparePanel({ allDocs, aiMode, navigate }) {
           ))}
         </div>
       )}
-      {!aiMode && (
-        <div className="mt-2 text-[10px] text-amber-400 flex items-center gap-1">
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          <button onClick={() => navigate('/settings')} className="underline hover:text-amber-300">Configure API key</button> for real AI comparison
-        </div>
-      )}
     </div>
   );
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function Documents() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const userRole = user?.role || 'user';
-  const isAdmin  = userRole === 'admin';
-  const aiMode   = isConfigured();
-
   const [activeTab, setActiveTab] = useState('documents');
 
-  // ─ Documents state ──────────────────────────────────────────────────────────
-  const [docs,        setDocs]        = useState([]);
-  const [backendDocs, setBackendDocs] = useState([]);
-  const [docFilter,   setDocFilter]   = useState('All');
-  const [query,       setQuery]       = useState('');
-  const [deletingId,  setDeletingId]  = useState(null);
+  // ─ Documents state (browser-held) ───────────────────────────────────────────
+  const [docs,       setDocs]      = useState([]);
+  const [docFilter,  setDocFilter] = useState('All');
+  const [query,      setQuery]     = useState('');
+  const [deletingId, setDeletingId] = useState(null);
 
-  const refreshBackendDocs = useCallback(async () => {
-    try { const bd = await listDocuments(); setBackendDocs(bd); } catch (_) {}
-  }, []);
+  const refreshDocs = useCallback(() => { listUserDocs().then(setDocs).catch(() => setDocs([])); }, []);
 
-  useEffect(() => { refreshBackendDocs(); }, [refreshBackendDocs]);
+  useEffect(() => {
+    refreshDocs();
+    window.addEventListener('docstore:changed', refreshDocs);
+    return () => window.removeEventListener('docstore:changed', refreshDocs);
+  }, [refreshDocs]);
 
   const handleDelete = useCallback(async (doc) => {
-    if (!window.confirm(`Delete "${doc.name}"?\n\nThis will remove it from the knowledge base and it cannot be undone.`)) return;
+    if (!window.confirm(`Remove "${doc.name}" from your workspace?`)) return;
     setDeletingId(doc.id);
-    try {
-      await deleteDocument(doc.id);
-      await refreshBackendDocs();
-    } catch (err) {
-      window.alert(`Delete failed: ${err.message}`);
-    }
+    try { await removeUserDoc(doc.id); } catch (_) {}
     setDeletingId(null);
-  }, [refreshBackendDocs]);
+  }, []);
 
-  const displayDocs = aiMode ? backendDocs.filter(d => d.uploadedBy !== 'system') : docs;
-  const types       = ['All', ...Array.from(new Set(displayDocs.map(d => d.type)))];
-
-  const filtered = useMemo(() => displayDocs.filter(d => {
+  const types    = ['All', ...Array.from(new Set(docs.map(d => d.type)))];
+  const filtered = useMemo(() => docs.filter(d => {
     if (docFilter !== 'All' && d.type !== docFilter) return false;
     if (query && !d.name.toLowerCase().includes(query.toLowerCase())) return false;
     return true;
-  }), [displayDocs, docFilter, query]);
+  }), [docs, docFilter, query]);
 
   const summary = useMemo(() => ({
-    total:      displayDocs.length,
-    pages:      displayDocs.reduce((s, d) => s + (d.pages || d.chunkCount || 0), 0),
-    compliance: displayDocs.filter(d => d.docCategory === 'compliance' || COMPLIANCE_TYPES.has(d.type)).length,
-    vendor:     displayDocs.filter(d => d.docCategory === 'vendor' || (!COMPLIANCE_TYPES.has(d.type) && d.docCategory !== 'system')).length,
-  }), [displayDocs]);
-
-  const allDocsForCompare = useMemo(() => backendDocs.map(d => ({ id: d.id, name: d.name })), [backendDocs]);
+    total: docs.length,
+    pages: docs.reduce((s, d) => s + (d.pages || 0), 0),
+    types: new Set(docs.map(d => d.type)).size,
+    chars: docs.reduce((s, d) => s + (d.textLength || 0), 0),
+  }), [docs]);
 
   // ─ Validator state ──────────────────────────────────────────────────────────
   const [selectedSpec, setSelectedSpec] = useState('');
@@ -466,21 +376,13 @@ export default function Documents() {
   const [aiFindings,   setAiFindings]   = useState(null);
   const [aiError,      setAiError]      = useState(null);
 
-  const validatorDocs = useMemo(() => backendDocs.filter(d => d.uploadedBy !== 'system'), [backendDocs]);
-
   useEffect(() => {
-    if (validatorDocs.length > 0 && !validatorDocs.find(d => d.id === selectedSpec)) {
-      setSelectedSpec(validatorDocs[0].id);
-    }
-  }, [validatorDocs, selectedSpec]);
+    if (docs.length > 0 && !docs.find(d => d.id === selectedSpec)) setSelectedSpec(docs[0].id);
+  }, [docs, selectedSpec]);
 
-  const spec = validatorDocs.find(s => s.id === selectedSpec);
+  const spec = docs.find(s => s.id === selectedSpec);
 
-  const findings = useMemo(() => {
-    if (aiFindings !== null) return aiFindings;
-    return staticFindingsFor(spec);
-  }, [aiFindings, spec]);
-
+  const findings = useMemo(() => aiFindings || [], [aiFindings]);
   const visible = useMemo(() => {
     if (valFilter === 'all') return findings;
     return findings.filter(f => f.severity === valFilter || f.status === valFilter);
@@ -489,8 +391,6 @@ export default function Documents() {
   const counts = useMemo(() => ({
     critical: findings.filter(f => f.severity === 'critical').length,
     high:     findings.filter(f => f.severity === 'high').length,
-    medium:   findings.filter(f => f.severity === 'medium').length,
-    open:     findings.filter(f => f.status === 'open').length,
     resolved: findings.filter(f => f.status === 'resolved').length,
   }), [findings]);
 
@@ -499,62 +399,39 @@ export default function Documents() {
   ), [findings]);
 
   const runScan = async () => {
-    setRunning(true);
-    setScanLog([]);
-    setAiFindings(null);
-    setAiError(null);
-
-    const docPages = spec?.pages || spec?.chunkCount || 200;
-    const steps = aiMode ? [
+    setRunning(true); setScanLog([]); setAiFindings(null); setAiError(null);
+    const docPages = spec?.pages || 200;
+    const steps = [
       `Loading document: ${spec?.name || selectedSpec}…`,
-      `Domain: ${spec?.type || 'General'} — retrieving applicable rules from KB…`,
-      `Running TF-IDF retrieval across ${docPages} pages…`,
+      `Domain: ${spec?.type || 'General'} — retrieving applicable rules from knowledge base…`,
+      `Running hybrid retrieval across ${docPages} pages…`,
       `Cross-referencing IRS / DNV / ABS / IACS clauses…`,
       `Checking IMO MARPOL & SOLAS applicability…`,
       `Verifying IEC 60092 series electrical clauses…`,
-      `Sending to Gemini for compliance analysis…`,
-      `Detecting inconsistencies and repetitive statements…`,
-      `Computing compliance score…`,
-      `Scan complete · AI findings ready`,
-    ] : [
-      `Loading document: ${spec?.name || selectedSpec}…`,
-      `Tokenising ${docPages} pages…`,
-      `Retrieving applicable rule corpus from KB…`,
-      `Cross-referencing IRS / DNV / ABS / IACS clauses…`,
-      `Checking IMO MARPOL & SOLAS applicability…`,
-      `Verifying IEC 60092 series electrical clauses…`,
+      `Running local compliance analysis…`,
       `Detecting inconsistencies and repetitive statements…`,
       `Computing compliance score…`,
       `Scan complete · findings ready`,
     ];
-
     steps.forEach((s, i) => setTimeout(() => setScanLog(prev => [...prev, s]), i * 320));
 
-    if (aiMode) {
-      try {
-        const result = await validate(selectedSpec, spec?.type, `Document: ${spec?.name}`);
-        if (result.findings && result.findings.length > 0) {
-          setAiFindings(result.findings);
-        } else {
-          setAiError('AI returned no structured findings. Showing raw analysis in log.');
-          if (result.rawAnalysis) {
-            setScanLog(prev => [...prev, '─── AI Analysis ───', ...result.rawAnalysis.split('\n').slice(0, 8)]);
-          }
-        }
-      } catch (e) {
-        setAiError(e.message);
-        setScanLog(prev => [...prev, `⚠ AI error: ${e.message}`]);
+    try {
+      const full = await getUserDoc(selectedSpec);
+      const result = await validate({ specText: full?.text, specName: spec?.name, domain: spec?.type, additionalContext: `Document: ${spec?.name}` });
+      if (result.findings && result.findings.length > 0) setAiFindings(result.findings);
+      else {
+        setAiError('No structured findings were returned. Showing raw analysis in the log.');
+        if (result.rawAnalysis) setScanLog(prev => [...prev, '─── Analysis ───', ...result.rawAnalysis.split('\n').slice(0, 8)]);
       }
+    } catch (e) {
+      setAiError(e.message);
+      setScanLog(prev => [...prev, `⚠ Error: ${e.message}`]);
     }
-
     setTimeout(() => setRunning(false), steps.length * 320);
   };
 
-  // ─ Tab button helper ─────────────────────────────────────────────────────────
   const tabCls = (tab) => `px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors border ${
-    activeTab === tab
-      ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-      : 'text-slate-400 hover:text-white border-transparent'
+    activeTab === tab ? 'bg-sky-500/20 text-sky-300 border-sky-500/40' : 'text-slate-400 hover:text-white border-transparent'
   }`;
 
   return (
@@ -562,14 +439,10 @@ export default function Documents() {
       <div>
         <h1 className="text-xl font-bold text-white tracking-tight">Document Intelligence</h1>
         <p className="text-[11px] text-slate-400 mt-0.5">
-          {isAdmin
-            ? 'Upload compliance & vendor documents · AI extraction · comparison · rule validation'
-            : 'Upload vendor design documents · validate against compliance rules · compare with AI'
-          }
+          Upload your documents here — they are read (with vision for scanned pages), auto-classified, and made available across every tool. Documents stay in your workspace until you sign out.
         </p>
       </div>
 
-      {/* Tab switcher */}
       <div className="flex gap-1 bg-app-panel border border-app-border rounded-xl p-1 w-fit">
         <button className={tabCls('documents')} onClick={() => setActiveTab('documents')}>Documents</button>
         <button className={tabCls('validator')} onClick={() => setActiveTab('validator')}>Rule Validator</button>
@@ -578,40 +451,12 @@ export default function Documents() {
       {/* ── DOCUMENTS TAB ───────────────────────────────────────────────────── */}
       {activeTab === 'documents' && (
         <>
-          {/* Role badge */}
-          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[10px] font-semibold ${
-            isAdmin
-              ? 'bg-violet-500/10 border-violet-500/30 text-violet-300'
-              : 'bg-sky-500/10 border-sky-500/30 text-sky-300'
-          }`}>
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d={isAdmin
-                  ? 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'
-                  : 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'
-                } />
-            </svg>
-            {isAdmin ? 'Administrator — full document access' : 'Design Engineer — vendor documents only'}
-          </div>
-
-          {!isAdmin && (
-            <div className="flex items-start gap-2 bg-amber-500/[0.06] border border-amber-500/25 rounded-lg px-3 py-2 text-[11px] text-amber-300">
-              <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-              <span>
-                Upload procurement documents as <strong>SOTR</strong> (Statement of Technical Requirements),{' '}
-                <strong>Technical Offer</strong> (vendor offer &amp; compliance matrix), or{' '}
-                <strong>Binding Data</strong> (vendor-committed drawings &amp; data sheets).
-              </span>
-            </div>
-          )}
-
-          {/* Summary tiles */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { label:'Indexed',            value:summary.total,                  color:'text-sky-400',    sub:'documents' },
-              { label:'Compliance Docs',    value:summary.compliance,             color:'text-violet-400', sub:'guardrails & rules' },
-              { label:'Procurement Docs',    value:summary.vendor,                 color:'text-teal-400',   sub:'SOTR · Offer · Binding' },
-              { label:'Total Pages/Chunks', value:summary.pages.toLocaleString(), color:'text-amber-400',  sub:'indexed content' },
+              { label:'In Workspace',  value:summary.total,                  color:'text-sky-400',    sub:'documents' },
+              { label:'Document Types',value:summary.types,                  color:'text-violet-400', sub:'detected' },
+              { label:'Total Pages',   value:summary.pages.toLocaleString(), color:'text-amber-400',  sub:'extracted' },
+              { label:'Characters',    value:summary.chars.toLocaleString(), color:'text-teal-400',   sub:'indexed content' },
             ].map(({ label, value, color, sub }) => (
               <div key={label} className="bg-app-panel border border-app-border rounded-xl p-4">
                 <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">{label}</div>
@@ -623,15 +468,11 @@ export default function Documents() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div className="lg:col-span-2 space-y-3">
-              <UploadCard
-                aiMode={aiMode}
-                userRole={userRole}
-                onAdd={(d) => { setDocs(prev => [d, ...prev]); refreshBackendDocs(); }}
-              />
+              <UploadCard onAdded={refreshDocs} />
 
               <div className="bg-app-panel border border-app-border rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-app-border flex items-center gap-3 flex-wrap">
-                  <h3 className="text-sm font-bold text-white">Indexed Documents</h3>
+                  <h3 className="text-sm font-bold text-white">Your Documents</h3>
                   <input
                     value={query}
                     onChange={e => setQuery(e.target.value)}
@@ -644,9 +485,7 @@ export default function Documents() {
                         key={t}
                         onClick={() => setDocFilter(t)}
                         className={`text-[10px] px-2 py-1 rounded border font-semibold ${
-                          docFilter === t
-                            ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+                          docFilter === t ? 'bg-sky-500/20 text-sky-300 border-sky-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
                         }`}
                       >{t}</button>
                     ))}
@@ -657,11 +496,9 @@ export default function Documents() {
                     <thead className="text-[9px] uppercase tracking-widest text-slate-500 bg-white/[0.02]">
                       <tr>
                         <th className="text-left px-3 py-2 font-bold">Document</th>
-                        <th className="text-left px-3 py-2 font-bold">Type</th>
+                        <th className="text-left px-3 py-2 font-bold">Detected Type</th>
                         <th className="text-right px-3 py-2 font-bold">Pages</th>
-                        {isAdmin && <th className="text-left px-3 py-2 font-bold">Uploaded By</th>}
-                        <th className="text-center px-3 py-2 font-bold">OCR</th>
-                        <th className="text-right px-3 py-2 font-bold">Confidence</th>
+                        <th className="text-left px-3 py-2 font-bold">Added</th>
                         <th className="px-3 py-2"></th>
                       </tr>
                     </thead>
@@ -669,63 +506,34 @@ export default function Documents() {
                       {filtered.map(d => (
                         <tr key={d.id} className="hover:bg-white/[0.02]">
                           <td className="px-3 py-2">
-                            <div className="font-mono text-[10px] text-slate-500">{d.id}</div>
                             <div className="text-slate-200 font-semibold leading-tight">{d.name}</div>
+                            <div className="font-mono text-[9px] text-slate-600">{Math.round((d.textLength || 0) / 1000)}k chars</div>
                           </td>
                           <td className="px-3 py-2">
                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest ${TYPE_COLOR[d.type] || 'bg-slate-700 text-slate-300 border-slate-600'}`}>{d.type}</span>
                           </td>
-                          <td className="text-right px-3 py-2 text-slate-300 font-mono">{d.pages || d.chunkCount || '—'}</td>
-                          {isAdmin && (
-                            <td className="px-3 py-2">
-                              {d.uploadedBy ? (
-                                <span className={`text-[9px] px-1 py-0.5 rounded font-semibold border ${
-                                  d.uploadedByRole === 'admin'
-                                    ? 'bg-violet-500/10 text-violet-300 border-violet-500/25'
-                                    : d.uploadedByRole === 'system'
-                                    ? 'bg-slate-700 text-slate-400 border-slate-600'
-                                    : 'bg-sky-500/10 text-sky-300 border-sky-500/25'
-                                }`}>{d.uploadedBy}</span>
-                              ) : <span className="text-slate-600">—</span>}
-                            </td>
-                          )}
-                          <td className="text-center px-3 py-2">
-                            {d.ocr
-                              ? <span className="text-[9px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 rounded px-1.5 py-0.5">Yes</span>
-                              : <span className="text-[9px] text-slate-500">No</span>}
-                          </td>
-                          <td className="text-right px-3 py-2">
-                            <span className={`font-mono text-[11px] ${
-                              !d.confidence ? 'text-slate-500' :
-                              d.confidence >= 99 ? 'text-emerald-400' :
-                              d.confidence >= 97 ? 'text-amber-300' :
-                              'text-orange-300'
-                            }`}>
-                              {d.confidence ? `${(d.confidence || 0).toFixed(1)}%` : '—'}
-                            </span>
-                          </td>
+                          <td className="text-right px-3 py-2 text-slate-300 font-mono">{d.pages || '—'}</td>
+                          <td className="px-3 py-2 text-slate-500">{d.addedAt ? new Date(d.addedAt).toLocaleDateString() : '—'}</td>
                           <td className="px-3 py-2 text-right">
-                            {(isAdmin || d.uploadedBy === user?.username) && d.uploadedBy !== 'system' && (
-                              <button
-                                onClick={() => handleDelete(d)}
-                                disabled={deletingId === d.id}
-                                title="Delete document"
-                                className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
-                              >
-                                {deletingId === d.id ? (
-                                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                                ) : (
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                )}
-                              </button>
-                            )}
+                            <button
+                              onClick={() => handleDelete(d)}
+                              disabled={deletingId === d.id}
+                              title="Remove document"
+                              className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                            >
+                              {deletingId === d.id ? (
+                                <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                              ) : (
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              )}
+                            </button>
                           </td>
                         </tr>
                       ))}
                       {filtered.length === 0 && (
                         <tr>
-                          <td colSpan={isAdmin ? 7 : 6} className="px-3 py-8 text-center text-slate-500 text-[11px]">
-                            No documents match the current filter.
+                          <td colSpan={5} className="px-3 py-8 text-center text-slate-500 text-[11px]">
+                            No documents yet. Upload one above to get started.
                           </td>
                         </tr>
                       )}
@@ -737,7 +545,7 @@ export default function Documents() {
 
             <div className="space-y-3">
               <ConversionTool />
-              <ComparePanel allDocs={allDocsForCompare} aiMode={aiMode} navigate={navigate} />
+              <ComparePanel docs={docs} />
             </div>
           </div>
         </>
@@ -747,31 +555,20 @@ export default function Documents() {
       {activeTab === 'validator' && (
         <>
           <p className="text-[11px] text-slate-400 -mt-2">
-            {aiMode
-              ? 'AI-powered compliance scan — Claude cross-references build specs against the knowledge base'
-              : 'Automated cross-referencing of Build Specifications against Class · IMO · IEC · Naval rules (demo mode)'
-            }
+            Compliance scan — the assistant cross-references your document against the knowledge base (Class · IMO · IEC · Naval rules).
           </p>
 
-          {!aiMode && (
-            <div className="flex items-center gap-2 bg-amber-500/[0.08] border border-amber-500/30 rounded-lg px-3 py-2 text-[11px] text-amber-300">
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-              Demo mode — findings are static examples.
-              <button onClick={() => navigate('/settings')} className="font-bold underline hover:text-white">Configure API key →</button>
-            </div>
-          )}
           {aiError && (
             <div className="flex items-center gap-2 bg-red-500/[0.08] border border-red-500/30 rounded-lg px-3 py-2 text-[11px] text-red-300">
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-              AI validation error: {aiError}
+              {aiError}
             </div>
           )}
 
-          {/* Spec selector + score */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div className="bg-app-panel border border-app-border rounded-xl p-4 lg:col-span-2">
               <div className="flex items-center gap-3 mb-3">
-                {validatorDocs.length === 0 ? (
+                {docs.length === 0 ? (
                   <div className="flex-1 text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700">
                     No documents uploaded yet. Upload a document in the Documents tab to validate it.
                   </div>
@@ -781,7 +578,7 @@ export default function Documents() {
                     onChange={e => { setSelectedSpec(e.target.value); setAiFindings(null); setScanLog([]); setAiError(null); }}
                     className="flex-1 text-sm px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 font-mono font-bold"
                   >
-                    {validatorDocs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
                 )}
                 <button
@@ -793,18 +590,17 @@ export default function Documents() {
                     <><svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> Scanning…</>
                   ) : (
                     <><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                      {aiMode ? 'Run AI Validation Scan' : 'Run Validation Scan'}
-                    </>
+                      Run Validation Scan</>
                   )}
                 </button>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
                 {[
-                  { label:'Type',        value: spec?.type || '—' },
-                  { label:'Pages',       value: spec?.pages || spec?.chunkCount || '—' },
-                  { label:'Uploaded',    value: spec?.addedAt ? new Date(spec.addedAt).toLocaleDateString() : '—' },
-                  { label:'Findings',    value: findings.length, className:'text-amber-400' },
+                  { label:'Type',     value: spec?.type || '—' },
+                  { label:'Pages',    value: spec?.pages || '—' },
+                  { label:'Added',    value: spec?.addedAt ? new Date(spec.addedAt).toLocaleDateString() : '—' },
+                  { label:'Findings', value: findings.length, className:'text-amber-400' },
                 ].map(({ label, value, className }) => (
                   <div key={label} className="bg-slate-950/40 rounded-lg p-2 border border-slate-800">
                     <div className="text-[9px] uppercase tracking-widest text-slate-500">{label}</div>
@@ -818,12 +614,11 @@ export default function Documents() {
                   {scanLog.map((l, i) => (
                     <div key={i} className={l.startsWith('⚠') ? 'text-red-400' : l.startsWith('─') ? 'text-slate-500' : 'text-slate-400'}>▸ {l}</div>
                   ))}
-                  {running && <div className="text-sky-400 animate-pulse">▸ {aiMode ? 'Claude analyzing…' : 'Processing…'}</div>}
+                  {running && <div className="text-sky-400 animate-pulse">▸ Analyzing…</div>}
                 </div>
               )}
             </div>
 
-            {/* Compliance score gauge */}
             <div className="bg-app-panel border border-app-border rounded-xl p-4 flex flex-col items-center justify-center">
               <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Compliance Score</div>
               <div className="relative w-32 h-32">
@@ -837,7 +632,7 @@ export default function Documents() {
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-3xl font-bold text-white">{score}</span>
+                  <span className="text-3xl font-bold text-white">{findings.length ? score : '—'}</span>
                   <span className="text-[10px] text-slate-500">/ 100</span>
                 </div>
               </div>
@@ -846,16 +641,9 @@ export default function Documents() {
                 <div><div className="font-bold text-orange-400">{counts.high}</div><div className="text-slate-500 uppercase">High</div></div>
                 <div><div className="font-bold text-emerald-400">{counts.resolved}</div><div className="text-slate-500 uppercase">Resolved</div></div>
               </div>
-              {aiFindings !== null && (
-                <div className="mt-2 text-[9px] text-emerald-400 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  AI findings
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Findings + applicable rules */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div className="bg-app-panel border border-app-border rounded-xl overflow-hidden lg:col-span-2">
               <div className="px-4 py-3 border-b border-app-border flex items-center justify-between flex-wrap gap-2">
@@ -866,9 +654,7 @@ export default function Documents() {
                       key={f}
                       onClick={() => setValFilter(f)}
                       className={`text-[10px] px-2 py-1 rounded border font-semibold uppercase tracking-widest ${
-                        valFilter === f
-                          ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                          : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+                        valFilter === f ? 'bg-sky-500/20 text-sky-300 border-sky-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
                       }`}
                     >{f}</button>
                   ))}
@@ -877,10 +663,7 @@ export default function Documents() {
               <div className="divide-y divide-white/[0.04]">
                 {visible.length === 0 ? (
                   <div className="text-center text-slate-500 text-[11px] py-8">
-                    {aiFindings === null && scanLog.length === 0
-                      ? 'Run a validation scan to see compliance findings.'
-                      : 'No findings match the current filter.'
-                    }
+                    {aiFindings === null && scanLog.length === 0 ? 'Run a validation scan to see compliance findings.' : 'No findings match the current filter.'}
                   </div>
                 ) : visible.map((f, i) => {
                   const sev = SEV_STYLE[f.severity] || SEV_STYLE.low;
@@ -905,7 +688,6 @@ export default function Documents() {
                 })}
               </div>
             </div>
-
           </div>
         </>
       )}

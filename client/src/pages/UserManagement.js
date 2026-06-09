@@ -6,8 +6,6 @@ const ROLE_BADGE = {
   user:  'bg-sky-500/15 text-sky-300 border-sky-500/30',
 };
 
-const ROLE_LABEL = { admin: 'Administrator', user: 'Design Engineer' };
-
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -287,7 +285,6 @@ export default function UserManagement() {
               'Compare vendor documents with AI diff',
               'Validate documents against compliance rules',
               'Query the AI design assistant',
-              'View 3D ship design visualizer',
             ],
           },
         ].map(r => (

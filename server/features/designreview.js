@@ -112,7 +112,7 @@ Output ONLY the JSON.`;
     });
   } catch (err) {
     console.error('[/api/designreview/checklist]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
 

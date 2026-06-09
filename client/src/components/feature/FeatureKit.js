@@ -1,6 +1,6 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { extractText, downloadXlsx } from '../../services/featureApi';
-import { listDocuments } from '../../services/aiService';
+import React, { useState, useEffect } from 'react';
+import { downloadXlsx } from '../../services/featureApi';
+import { listUserDocs, getUserDoc } from '../../services/docStore';
 
 /* ─── Layout primitives ──────────────────────────────────────────────────── */
 export function Page({ title, subtitle, children, actions }) {
@@ -103,71 +103,43 @@ export function Pill({ children, value }) {
 
 const PILL_COLS = /sever|status|risk|likeli|impact|recurring|priority|type|categ/i;
 
-/* ─── Document source: pick from KB or upload+extract ─────────────────────── */
-export function DocSource({ label, value, onChange, accept = '.pdf,.docx,.txt,.png,.jpg,.jpeg' }) {
-  const [docs, setDocs]   = useState([]);
-  const [mode, setMode]   = useState('upload');     // 'kb' | 'upload'
-  const [busy, setBusy]   = useState(false);
-  const [error, setError] = useState(null);
-  const fileRef = useRef(null);
+/* ─── Document source: pick one of the user's uploaded documents ──────────────
+   Documents are uploaded once on the Documents page and persist (in the browser)
+   for the rest of the session. Every feature selects from that shared list. */
+export function DocSource({ label, value, onChange }) {
+  const [docs, setDocs] = useState([]);
 
   useEffect(() => {
-    listDocuments().then(setDocs).catch(() => setDocs([]));
+    const load = () => listUserDocs().then(setDocs).catch(() => setDocs([]));
+    load();
+    window.addEventListener('docstore:changed', load);
+    return () => window.removeEventListener('docstore:changed', load);
   }, []);
 
-  const onFile = async (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setBusy(true); setError(null);
-    try {
-      const r = await extractText(f);
-      onChange({ text: r.text, name: r.name });
-    } catch (err) { setError(err.message); onChange(null); }
-    setBusy(false);
-  };
-
-  const onPickKb = (id) => {
+  const onPick = async (id) => {
     if (!id) { onChange(null); return; }
-    const d = docs.find(x => x.id === id);
-    onChange({ id, name: d?.name || id });
+    const d = await getUserDoc(id);
+    if (d) onChange({ id: d.id, name: d.name, text: d.text });
   };
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-[11px] font-semibold text-slate-300">{label}</label>
-        <div className="flex items-center gap-1 text-[9px]">
-          <button onClick={() => setMode('upload')} className={`px-2 py-0.5 rounded ${mode === 'upload' ? 'bg-sky-500/20 text-sky-300' : 'text-slate-500 hover:text-slate-300'}`}>Upload</button>
-          <button onClick={() => setMode('kb')} className={`px-2 py-0.5 rounded ${mode === 'kb' ? 'bg-sky-500/20 text-sky-300' : 'text-slate-500 hover:text-slate-300'}`}>Knowledge Base</button>
+      <label className="text-[11px] font-semibold text-slate-300">{label}</label>
+      {docs.length === 0 ? (
+        <div className="text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700">
+          No documents yet — upload one on the <span className="text-sky-400">Documents</span> page.
         </div>
-      </div>
-
-      {mode === 'upload' ? (
-        <>
-          <input ref={fileRef} type="file" accept={accept} className="hidden" onChange={onFile} />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={busy}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors disabled:opacity-50"
-          >
-            {busy ? <Spinner /> : (
-              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-            )}
-            <span className="truncate">{busy ? 'Extracting text…' : (value?.text ? value.name : 'Select file (PDF, DOCX, image)…')}</span>
-          </button>
-        </>
       ) : (
         <select
           value={value?.id || ''}
-          onChange={(e) => onPickKb(e.target.value)}
+          onChange={(e) => onPick(e.target.value)}
           className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-[11px] text-slate-200"
         >
-          <option value="">Select a knowledge-base document…</option>
-          {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          <option value="">Select an uploaded document…</option>
+          {docs.map(d => <option key={d.id} value={d.id}>{d.name} · {d.type}</option>)}
         </select>
       )}
-      {value && <div className="text-[10px] text-emerald-400">✓ {value.name}{value.text ? ` · ${(value.text.length / 1000).toFixed(0)}k chars` : ' (knowledge base)'}</div>}
-      <ErrorNote>{error}</ErrorNote>
+      {value && <div className="text-[10px] text-emerald-400">✓ {value.name}{value.text ? ` · ${(value.text.length / 1000).toFixed(0)}k chars` : ''}</div>}
     </div>
   );
 }
