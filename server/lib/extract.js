@@ -42,6 +42,23 @@ const MIN_PAGE_TEXT_CHARS = 80;
 // the host's gateway timeout. Default 10 keeps a scanned-doc upload responsive;
 // raise EXTRACT_MAX_VISION_PAGES on a host with a longer timeout.
 const MAX_VISION_PAGES = parseInt(process.env.EXTRACT_MAX_VISION_PAGES || '10', 10);
+// OCR pages in parallel (bounded) so a multi-page scan finishes well within the
+// host's gateway timeout instead of running one slow vision call at a time.
+const OCR_CONCURRENCY = parseInt(process.env.EXTRACT_OCR_CONCURRENCY || '3', 10);
+
+/** Run an async mapper over items with bounded concurrency, preserving order. */
+async function mapLimit(items, limit, mapper) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await mapper(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
 
 const OCR_PROMPT =
   'Extract ALL text and tabular data from this page exactly as it appears, including text inside ' +
@@ -77,8 +94,7 @@ async function extractPdfText(buffer) {
     if (text.length >= MIN_PAGE_TEXT_CHARS) return text;
 
     const pngs = await rasterizePdfToPngs(buffer, { maxPages: MAX_VISION_PAGES }).catch(() => []);
-    const parts = [];
-    for (const pg of pngs) parts.push(await ocrImage(pg.data).catch(() => ''));
+    const parts = await mapLimit(pngs, OCR_CONCURRENCY, pg => ocrImage(pg.data).catch(() => ''));
     const ocrText = parts.filter(Boolean).join('\n\n').trim();
     if (ocrText) return ocrText;
     throw diagnoseEmpty(true);   // no text layer at all → treat as scanned
@@ -91,10 +107,9 @@ async function extractPdfText(buffer) {
   const ocrByPage = new Map();
   if (visionPages.length) {
     const pngs = await rasterizePdfToPngs(buffer, { pages: visionPages, maxPages: MAX_VISION_PAGES }).catch(() => []);
-    for (const pg of pngs) {
-      const txt = await ocrImage(pg.data).catch(() => '');
-      if (txt) ocrByPage.set(pg.page, txt);
-    }
+    const ocrResults = await mapLimit(pngs, OCR_CONCURRENCY,
+      pg => ocrImage(pg.data).then(txt => ({ page: pg.page, txt })).catch(() => ({ page: pg.page, txt: '' })));
+    for (const r of ocrResults) if (r.txt) ocrByPage.set(r.page, r.txt);
   }
 
   // Reassemble in page order, preferring the text layer, then OCR.
