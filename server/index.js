@@ -459,38 +459,80 @@ app.post('/api/upload', authenticate, upload.single('file'), async (req, res) =>
 // Body (multipart): file, format (TXT | XLSX | DOCX | ODF)
 // Returns the converted file as a download.
 //
-// XLSX conversion targets the official inspection-remarks register format
-// (Drishti iDEX MVP submission template): the document is parsed by AI into
-// these exact columns, one row per remark/observation.
+// XLSX conversion is document-type aware. The document is parsed by AI into the
+// exact columns of the matching official template, one row per item:
+//   • Binding-data / equipment data sheet → equipment-specification register
+//   • Everything else (inspection / trial reports) → inspection-remarks register
 // ─────────────────────────────────────────────────────────────────────────────
-const INSPECTION_REMARK_COLUMNS = [
-  'S.No',
-  'Name of the project',
-  'Name of the equipment /system/material',
-  'Name of the inspection agency',
-  'Date of the inspection',
-  'Document no if any',
-  'Trial sl.no',
-  'Description of the remark',
-  'SAT/UNSAT',
-  'classification of the remark',
-  'Signed by ',
-];
+const XLSX_TEMPLATES = {
+  binding: {
+    sheet:   'Binding Data',
+    columns: [
+      'S.No',
+      'Name of the equipment',
+      'Dimensions',
+      'Maintenance Envelope',
+      'weight of the equipment',
+      'Power rating',
+      'Heat dissipation',
+      'Type of mounting(Bulkhead (wall)/Deck/table top)',
+    ],
+    intro:    'You are processing a vendor "binding data" / equipment data sheet to build an equipment-specification register. Extract EVERY distinct equipment / system / unit as ONE row.',
+    guidance: [
+      '- "S.No": leave "" (it is renumbered automatically).',
+      '- "Name of the equipment": the equipment / unit / system name or tag.',
+      '- "Dimensions": overall size (e.g. L x W x H with units) exactly as stated.',
+      '- "Maintenance Envelope": clearance / access space required for maintenance.',
+      '- "weight of the equipment": mass with units (kg / t).',
+      '- "Power rating": electrical rating as stated (kW / V / A / phase / Hz).',
+      '- "Heat dissipation": heat load as stated (W / kW / kCal/h / BTU/h).',
+      '- "Type of mounting(Bulkhead (wall)/Deck/table top)": Bulkhead, Deck or Table top when indicated.',
+    ].join('\n'),
+  },
+  inspection: {
+    sheet:   'Inspection Remarks',
+    columns: [
+      'S.No',
+      'Name of the project',
+      'Name of the equipment /system/material',
+      'Name of the inspection agency',
+      'Date of the inspection',
+      'Document no if any',
+      'Trial sl.no',
+      'Description of the remark',
+      'SAT/UNSAT',
+      'classification of the remark',
+      'Signed by ',
+    ],
+    intro:    'You are processing an inspection / trial / technical document to fill an official inspection-remarks register. Extract EVERY distinct remark, observation, defect, non-conformance or trial result as ONE row.',
+    guidance: [
+      '- "S.No": leave "" (it is renumbered automatically).',
+      '- "Description of the remark": the remark / observation / finding text — precise and complete.',
+      '- "SAT/UNSAT": "SAT" if satisfactory / acceptable / passed; "UNSAT" if a defect / non-conformance / failure; else "".',
+      '- "classification of the remark": Major / Minor / Observation / Critical when indicated, else "".',
+      '- Project, equipment/system, inspection agency, date, document no and trial sl.no usually appear in the header/context — repeat them on each row where applicable.',
+    ].join('\n'),
+  },
+};
 
-async function extractInspectionRows(text, docName) {
-  const prompt = `You are processing an inspection / trial / technical document to fill an official inspection-remarks register.
-Extract EVERY distinct remark, observation, defect, non-conformance or trial result as ONE row.
+// Pick the template from the document's content/name (heuristic, no AI call).
+function pickXlsxTemplate(text, name = '') {
+  const s = `${name}\n${text.slice(0, 4000)}`.toLowerCase();
+  if (/binding\s*data|binding\s*dwg|\bbinding\b|data\s*sheet|datasheet|guaranteed\s+(data|particulars)|maintenance\s+envelope|heat\s+dissipation/.test(s)) {
+    return XLSX_TEMPLATES.binding;
+  }
+  return XLSX_TEMPLATES.inspection;
+}
 
-Return ONLY valid JSON of the form: { "rows": [ { ...one object per remark... } ] }
+async function extractTemplateRows(template, text, docName) {
+  const prompt = `${template.intro}
+
+Return ONLY valid JSON of the form: { "rows": [ { ...one object per item... } ] }
 Each object MUST use EXACTLY these keys (use "" when the document does not state a value):
-${INSPECTION_REMARK_COLUMNS.map(c => `  - "${c}"`).join('\n')}
+${template.columns.map(c => `  - "${c}"`).join('\n')}
 
 Guidance:
-- "S.No": leave "" (it is renumbered automatically).
-- "Description of the remark": the remark / observation / finding text — precise and complete.
-- "SAT/UNSAT": "SAT" if satisfactory / acceptable / passed; "UNSAT" if a defect / non-conformance / failure; else "".
-- "classification of the remark": Major / Minor / Observation / Critical when indicated, else "".
-- Project, equipment/system, inspection agency, date, document no and trial sl.no usually appear in the header/context — repeat them on each row where applicable.
+${template.guidance}
 - Never invent values. Use "" for anything not present in the document.
 
 Document name: ${docName}
@@ -520,20 +562,21 @@ app.post('/api/convert', authenticate, upload.single('file'), async (req, res) =
 
     // ── Produce output ───────────────────────────────────────────────────────
     if (format === 'XLSX') {
-      // AI-extract the document into the official inspection-remarks columns.
-      // If extraction fails (e.g. AI unavailable), still emit the correctly
-      // formatted template (headers only) so the output format is guaranteed.
+      // Choose the official template by document type, then AI-extract rows into
+      // its exact columns. If extraction fails (e.g. AI unavailable), still emit
+      // the correctly formatted template (headers only) so the format is guaranteed.
+      const template = pickXlsxTemplate(text, origName);
       let rows = [];
       try {
-        rows = await extractInspectionRows(text, origName);
+        rows = await extractTemplateRows(template, text, origName);
       } catch (err) {
-        console.warn('[/api/convert] inspection extraction failed — emitting template only:', err.message);
+        console.warn(`[/api/convert] ${template.sheet} extraction failed — emitting template only:`, err.message);
       }
       rows.forEach((r, i) => { r['S.No'] = String(i + 1); });   // renumber serially
 
       const buf = buildWorkbook([{
-        name:    'Inspection Remarks',
-        columns: INSPECTION_REMARK_COLUMNS,
+        name:    template.sheet,
+        columns: template.columns,
         rows,
       }]);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
