@@ -34,6 +34,7 @@ if (NODE_MAJOR < 18 || typeof fetch !== 'function') {
 // Shared inference + document helpers (single source of truth, reused by feature modules)
 const { getModel, generateText }   = require('./lib/llm');
 const { extractFileText }          = require('./lib/extract');
+const { isCanvasAvailable }        = require('./lib/rasterize');
 const { buildWorkbook }            = require('./lib/excel');
 
 // ── Automatic document-type classification ────────────────────────────────────
@@ -169,7 +170,14 @@ app.post('/api/auth/login', (req, res) => {
 
 // GET /api/health — public (for connectivity check)
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), ...rag.getStatus() });
+  res.json({
+    status:       'ok',
+    timestamp:    new Date().toISOString(),
+    nodeVersion:  process.versions.node,
+    aiConfigured: !!process.env.LLM_API_KEY,   // text + vision both need this
+    ocrAvailable: isCanvasAvailable(),         // scanned-PDF OCR needs the image renderer
+    ...rag.getStatus(),
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

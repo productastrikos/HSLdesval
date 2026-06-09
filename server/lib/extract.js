@@ -8,7 +8,27 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const { getModel } = require('./llm');
-const { extractPdfPageTexts, rasterizePdfToPngs } = require('./rasterize');
+const { extractPdfPageTexts, rasterizePdfToPngs, isCanvasAvailable } = require('./rasterize');
+
+// Build a specific, actionable error when a PDF yields no text — so a deployed
+// app reports the real cause instead of a blanket "could not read this file".
+function readError(message, status = 422) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
+function diagnoseEmpty(scanned) {
+  if (!scanned) {
+    return readError('Could not read this file. It may be empty, password-protected, or a corrupted/incomplete PDF.');
+  }
+  if (!isCanvasAvailable()) {
+    return readError('This looks like a scanned / image-only PDF, but the server\'s image renderer is unavailable, so OCR could not run. On the host, reinstall the server dependencies so "@napi-rs/canvas" installs for this platform (do not copy a Windows node_modules).');
+  }
+  if (!process.env.LLM_API_KEY) {
+    return readError('This is a scanned / image-only PDF that needs OCR, but the AI vision engine is not configured. Set LLM_API_KEY in the deployment environment.', 503);
+  }
+  return readError('This is a scanned / image-only PDF and the OCR/vision step returned no text. The vision model likely errored — check the server logs for "[inference]" entries.', 502);
+}
 
 const IMAGE_MIMES = new Set([
   'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff',
@@ -59,7 +79,9 @@ async function extractPdfText(buffer) {
     const pngs = await rasterizePdfToPngs(buffer, { maxPages: MAX_VISION_PAGES }).catch(() => []);
     const parts = [];
     for (const pg of pngs) parts.push(await ocrImage(pg.data).catch(() => ''));
-    return parts.filter(Boolean).join('\n\n');
+    const ocrText = parts.filter(Boolean).join('\n\n').trim();
+    if (ocrText) return ocrText;
+    throw diagnoseEmpty(true);   // no text layer at all → treat as scanned
   }
 
   // Identify pages that need vision (no usable text layer).
@@ -81,7 +103,10 @@ async function extractPdfText(buffer) {
     if (p.text.length >= MIN_PAGE_TEXT_CHARS) out.push(p.text);
     else if (ocrByPage.has(p.page))           out.push(ocrByPage.get(p.page));
   }
-  return out.join('\n\n').trim();
+  const result = out.join('\n\n').trim();
+  if (result) return result;
+  // Nothing readable — most pages had no text layer → scanned document.
+  throw diagnoseEmpty(needVision.length > 0);
 }
 
 async function extractFileText(buffer, mime, origName = '') {

@@ -106,4 +106,8 @@ async function rasterizePdfToPngs(buffer, { pages, maxPages = 12, scale } = {}) 
   return out;
 }
 
-module.exports = { extractPdfPageTexts, rasterizePdfToPngs };
+// True if the native image renderer loaded — i.e. scanned-PDF OCR can run.
+// Used by /api/health and the extractor's diagnostics.
+function isCanvasAvailable() { return !!getCanvas(); }
+
+module.exports = { extractPdfPageTexts, rasterizePdfToPngs, isCanvasAvailable };
