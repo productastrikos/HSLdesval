@@ -574,7 +574,7 @@ app.post('/api/convert', authenticate, upload.single('file'), async (req, res) =
       }
       rows.forEach((r, i) => { r['S.No'] = String(i + 1); });   // renumber serially
 
-      const buf = buildWorkbook([{
+      const buf = await buildWorkbook([{
         name:    template.sheet,
         columns: template.columns,
         rows,
@@ -746,11 +746,11 @@ app.post('/api/extract-text', authenticate, upload.single('file'), async (req, r
 // Body: { filename, sheets: [{ name, columns:[label], rows:[obj|array], title?, meta? }] }
 // Generic Excel generator used by every feature page's "Download Excel" action.
 // ─────────────────────────────────────────────────────────────────────────────
-app.post('/api/export/xlsx', authenticate, (req, res) => {
+app.post('/api/export/xlsx', authenticate, async (req, res) => {
   try {
     const { sheets, filename } = req.body;
     if (!Array.isArray(sheets) || !sheets.length) return res.status(400).json({ error: 'sheets[] is required.' });
-    const buf  = buildWorkbook(sheets);
+    const buf  = await buildWorkbook(sheets);
     const safe = (filename || 'export').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.xlsx$/i, '');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${safe}.xlsx"`);
