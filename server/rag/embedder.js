@@ -8,6 +8,16 @@ const CACHE_FILE = path.join(CACHE_DIR, 'store.json');
 const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
 const BATCH_SIZE = 32;
 
+// ── Semantic embeddings are OPTIONAL ──────────────────────────────────────────
+// They require @xenova/transformers (the onnxruntime-node native ML runtime):
+// heavy native binaries, a model download, and a RAM/CPU spike while the index is
+// built. That combination OOM-crashes memory-capped shared hosting, so it is OFF
+// by default and retrieval falls back to the pure-JS BM25 keyword leg — which
+// deploys anywhere with zero native deps and is well-suited to clause/standard
+// lookups. Enable it where you have headroom (e.g. a VPS) with RAG_SEMANTIC=on,
+// and ship server/rag/embcache/store.json so the model needn't rebuild at boot.
+const SEMANTIC_ENABLED = /^(1|true|on|yes)$/i.test(process.env.RAG_SEMANTIC || '');
+
 let _pipe  = null;
 let _cache = new Map();  // hashKey → number[]
 
@@ -43,10 +53,13 @@ function schedSave() {
   _saveTimer = setTimeout(() => { flushCache(); _saveTimer = null; }, 3000);
 }
 
-// Guarantee cache is written even on clean process exit
-process.once('exit',    flushCache);
-process.once('SIGINT',  () => { flushCache(); process.exit(0); });
-process.once('SIGTERM', () => { flushCache(); process.exit(0); });
+// Guarantee cache is written even on clean process exit (only when semantic mode
+// is on — otherwise there is nothing to persist).
+if (SEMANTIC_ENABLED) {
+  process.once('exit',    flushCache);
+  process.once('SIGINT',  () => { flushCache(); process.exit(0); });
+  process.once('SIGTERM', () => { flushCache(); process.exit(0); });
+}
 
 // FNV-1a 32-bit hash for cache keys
 function hashStr(s) {
@@ -85,6 +98,9 @@ async function getModel() {
  */
 async function embedBatch(texts) {
   if (!texts.length) return [];
+  // Disabled → no model, no native runtime, no boot-time spike. Null vectors make
+  // callers transparently fall back to BM25-only retrieval.
+  if (!SEMANTIC_ENABLED) return texts.map(() => null);
 
   let model;
   try {
@@ -139,7 +155,8 @@ function dotProduct(a, b) {
   return s;
 }
 
-// Prime the cache on module load
-loadCache();
+// Prime the cache on module load (only when semantic mode is on — avoids reading
+// the multi-MB store.json into memory when it will not be used).
+if (SEMANTIC_ENABLED) loadCache();
 
 module.exports = { embedBatch, embedOne, dotProduct, flushCache };

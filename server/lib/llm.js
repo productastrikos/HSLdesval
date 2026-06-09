@@ -15,6 +15,14 @@
 
 const { rasterizePdfToPngs } = require('./rasterize');
 
+// Model choice — balanced for this app and served REMOTELY (Groq), so model size
+// costs nothing on our server:
+//   • Text  → llama-3.3-70b-versatile: strong enough for clause-by-clause
+//     compliance reasoning and reliable JSON extraction, while staying fast/cheap
+//     on Groq. A small (8B) model is too weak for the technical nuance here; a
+//     larger frontier model is needless cost. This is the sweet spot.
+//   • Vision → llama-4-scout-17b: light multimodal model for reading scanned PDFs.
+// Override either via LLM_MODEL / LLM_VISION_MODEL if your endpoint differs.
 const ENGINE_URL    = (process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1').replace(/\/+$/, '') + '/chat/completions';
 const ENGINE_KEY    = process.env.LLM_API_KEY || '';
 const TEXT_MODEL    = process.env.LLM_MODEL        || 'llama-3.3-70b-versatile';

@@ -15,9 +15,12 @@ const bcrypt  = require('bcryptjs');
 const { sign, authenticate, requireAdmin } = require('./auth/middleware');
 const userStore = require('./auth/users');
 
+// A missing key is a DEPLOYMENT/config problem, not an app fault — so we never
+// crash the process over it (a dead process shows the host's blank 503 page).
+// The server still boots; AI routes return a clean "not configured" 503 (see
+// lib/llm.js), while login, health and the static site keep working.
 if (!process.env.LLM_API_KEY) {
-  console.error('[FATAL] LLM_API_KEY is not set. Add it to server/.env');
-  process.exit(1);
+  console.warn('[WARN] LLM_API_KEY is not set — AI features will return a clear "not configured" error until the key is added to the deployment environment. The server is starting normally.');
 }
 
 // Shared inference + document helpers (single source of truth, reused by feature modules)
@@ -69,7 +72,11 @@ ${text.slice(0, 3000)}`;
 }
 
 const app    = express();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
+// Uploads are buffered in memory (multer.memoryStorage), so the limit doubles as
+// a memory guard. Default 25 MB keeps a single upload from OOM-killing the process
+// on a memory-capped host; raise MAX_UPLOAD_MB where you have headroom (e.g. a VPS).
+const MAX_UPLOAD_MB = parseInt(process.env.MAX_UPLOAD_MB || '25', 10);
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024 } });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -697,7 +704,7 @@ app.use((err, req, res, next) => {
 
   if (err && err.name === 'MulterError') {
     const msg = err.code === 'LIMIT_FILE_SIZE'
-      ? 'The file is too large. The maximum upload size is 200 MB.'
+      ? `The file is too large. The maximum upload size is ${MAX_UPLOAD_MB} MB.`
       : `File upload error: ${err.message}`;
     return res.status(413).json({ error: msg });
   }
