@@ -200,26 +200,22 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
         className="flex flex-col shrink-0 overflow-hidden transition-all duration-200 bg-app-dark border-r border-app-border"
         style={{ width: sidebarOpen ? 'var(--app-sidebar-w, 244px)' : '60px' }}
       >
-        {/* Logo row */}
+        {/* Logo row — Astrikos brand mark + product name */}
         <div
-          className="flex items-center gap-3 px-4 cursor-pointer shrink-0 border-b border-app-border"
+          className={`flex items-center cursor-pointer shrink-0 border-b border-app-border ${sidebarOpen ? 'gap-2.5 px-4' : 'justify-center px-2'}`}
           style={{ height: 'var(--app-header-h, 62px)' }}
           onClick={() => navigate('/')}
+          title="HSL Design Validator — by Astrikos"
         >
-          <div style={{
-            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-            background: 'linear-gradient(135deg,#0ea5e9 0%,#6366f1 60%,#8b5cf6 100%)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 2px 12px rgba(99,102,241,0.35)',
-          }}>
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 17h18M5 17V9l7-5 7 5v8M9 17v-5h6v5" />
-            </svg>
-          </div>
+          <img
+            src="/astrikos-logo.jpg"
+            alt="Astrikos"
+            style={{ height: sidebarOpen ? 34 : 26, width: 'auto', maxWidth: sidebarOpen ? 58 : 40, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }}
+          />
           {sidebarOpen && (
-            <div className="min-w-0">
-              <div className="text-[13px] font-extrabold leading-tight tracking-tight" style={{ color: 'var(--app-text)' }}>HSL Design Validator</div>
-              <div className="text-[9px] uppercase tracking-widest" style={{ color: 'var(--app-text-faint)' }}>AI · Offline · Secure</div>
+            <div className="min-w-0 pl-2.5 border-l" style={{ borderColor: 'var(--app-border)' }}>
+              <div className="text-[12px] font-extrabold leading-tight tracking-tight" style={{ color: 'var(--app-text)' }}>HSL Design Validator</div>
+              <div className="text-[8px] uppercase tracking-widest mt-0.5" style={{ color: 'var(--app-text-faint)' }}>by Astrikos · Secure</div>
             </div>
           )}
         </div>
