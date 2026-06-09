@@ -39,6 +39,9 @@ function loadCache() {
 let _saveTimer = null;
 
 function flushCache() {
+  // No-op when semantic mode is off — the in-memory cache is empty, and writing
+  // it would clobber any prebuilt store.json on disk.
+  if (!SEMANTIC_ENABLED) return;
   try {
     const out = {};
     for (const [k, v] of _cache.entries()) out[k] = v;

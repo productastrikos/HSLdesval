@@ -1,9 +1,35 @@
 'use strict';
 
-const jwt   = require('jsonwebtoken');
-const users = require('./users');
+const jwt    = require('jsonwebtoken');
+const fs     = require('fs');
+const path   = require('path');
+const crypto = require('crypto');
+const users  = require('./users');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'hsl-validator-secret-2024';
+// JWT signing secret. Priority:
+//   1. JWT_SECRET from the environment (recommended for production / multi-instance).
+//   2. A persistent random secret stored in data/.jwt-secret (auto-generated once;
+//      survives restarts so sessions are not invalidated on every redeploy).
+// We never fall back to a hardcoded value — a shipped default would let anyone
+// forge admin tokens.
+function resolveSecret() {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  const dir  = path.join(__dirname, '..', 'data');
+  const file = path.join(dir, '.jwt-secret');
+  try {
+    if (fs.existsSync(file)) return fs.readFileSync(file, 'utf8').trim();
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const secret = crypto.randomBytes(48).toString('hex');
+    fs.writeFileSync(file, secret, { mode: 0o600 });
+    console.warn('[Auth] JWT_SECRET not set — generated a persistent random secret (data/.jwt-secret). For production, set JWT_SECRET in the environment.');
+    return secret;
+  } catch (err) {
+    console.warn(`[Auth] Could not persist a JWT secret (${err.message}); using an in-memory secret — users will need to log in again after each restart.`);
+    return crypto.randomBytes(48).toString('hex');
+  }
+}
+
+const JWT_SECRET = resolveSecret();
 const JWT_EXPIRY = '8h';
 
 function sign(user) {

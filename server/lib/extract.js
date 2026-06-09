@@ -17,8 +17,11 @@ const IMAGE_MIMES = new Set([
 // A page with fewer than this many characters of embedded text is treated as
 // scanned / image-only and routed to the vision model.
 const MIN_PAGE_TEXT_CHARS = 80;
-// Safety cap on how many image-only pages we OCR per document.
-const MAX_VISION_PAGES = parseInt(process.env.EXTRACT_MAX_VISION_PAGES || '20', 10);
+// Safety cap on how many image-only pages we OCR per document. OCR is sequential
+// and each page is a vision call (several seconds), so a high cap can blow past
+// the host's gateway timeout. Default 10 keeps a scanned-doc upload responsive;
+// raise EXTRACT_MAX_VISION_PAGES on a host with a longer timeout.
+const MAX_VISION_PAGES = parseInt(process.env.EXTRACT_MAX_VISION_PAGES || '10', 10);
 
 const OCR_PROMPT =
   'Extract ALL text and tabular data from this page exactly as it appears, including text inside ' +

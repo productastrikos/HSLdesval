@@ -28,6 +28,10 @@ const ENGINE_KEY    = process.env.LLM_API_KEY || '';
 const TEXT_MODEL    = process.env.LLM_MODEL        || 'llama-3.3-70b-versatile';
 const VISION_MODEL  = process.env.LLM_VISION_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct';
 const MAX_COMPLETION = parseInt(process.env.LLM_MAX_TOKENS || '8000', 10);
+// Per-request timeout so a slow/hung upstream fails cleanly instead of hanging
+// until the host's proxy kills the whole request. Keep it under the platform's
+// gateway timeout (Hostinger/LiteSpeed is typically ~100s).
+const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '100000', 10);
 // Vision models accept only a handful of images per request — keep within that.
 const MAX_VISION_PAGES = parseInt(process.env.LLM_MAX_VISION_PAGES || '5', 10);
 const MAX_IMAGES_PER_REQUEST = 5;
@@ -95,6 +99,10 @@ function inferenceError(message, status) {
 
 async function callEngine(messages, { json = false, vision = false, maxOutputTokens = 4096, temperature = 0.2 } = {}) {
   if (!ENGINE_KEY) throw inferenceError('The local inference engine is not configured.', 503);
+  // Built-in fetch requires Node 18+. A clear message beats a cryptic ReferenceError.
+  if (typeof fetch !== 'function') {
+    throw inferenceError('Server misconfiguration: Node.js 18+ is required (built-in fetch is unavailable). Set the Node version to 18 or higher in the hosting panel.', 500);
+  }
 
   const body = {
     model:       vision ? VISION_MODEL : TEXT_MODEL,
@@ -106,16 +114,25 @@ async function callEngine(messages, { json = false, vision = false, maxOutputTok
   // prompt discipline + tolerant parsing instead.
   if (json && !vision) body.response_format = { type: 'json_object' };
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
   let res;
   try {
     res = await fetch(ENGINE_URL, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ENGINE_KEY}` },
       body:    JSON.stringify(body),
+      signal:  controller.signal,
     });
   } catch (err) {
+    if (err.name === 'AbortError') {
+      console.error(`[inference] request timed out after ${LLM_TIMEOUT_MS}ms`);
+      throw inferenceError('The inference request timed out. Try again, or use a smaller document / fewer pages.', 504);
+    }
     console.error('[inference] transport error:', err.message);
     throw inferenceError('The local inference engine is unreachable.', 502);
+  } finally {
+    clearTimeout(timer);
   }
 
   if (!res.ok) {

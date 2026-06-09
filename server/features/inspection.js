@@ -16,11 +16,12 @@ const multer  = require('multer');
 const { generateJSON } = require('../lib/llm');
 const { extractFileText } = require('../lib/extract');
 const { resolveDocText, mapLimit } = require('./_util');
+const { MAX_UPLOAD_BYTES } = require('../lib/limits');
 const store = require('../lib/store');
 const { CATEGORIES, COLLECTION } = require('./lessons');
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
 
 const SYSTEM = `You are a senior QA/QC and design-review engineer at a shipyard processing inspection reports to build a cross-project Lessons-Learned repository.
 You read inspection reports, audit reports, NCRs, survey reports and trial reports, and you extract every distinct observation, non-conformity and remark.

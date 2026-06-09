@@ -23,6 +23,14 @@ if (!process.env.LLM_API_KEY) {
   console.warn('[WARN] LLM_API_KEY is not set — AI features will return a clear "not configured" error until the key is added to the deployment environment. The server is starting normally.');
 }
 
+// Node 18+ is required for built-in fetch (used by the inference layer). Warn
+// loudly but do NOT crash — login/health/static still work; only AI calls fail,
+// and they return a clear message. This makes a wrong Node version easy to spot.
+const NODE_MAJOR = parseInt(process.versions.node.split('.')[0], 10);
+if (NODE_MAJOR < 18 || typeof fetch !== 'function') {
+  console.warn(`[WARN] Node ${process.versions.node} detected — this app needs Node 18+ (for built-in fetch). Set the Node version to 18 or higher in the hosting panel, or AI features will fail.`);
+}
+
 // Shared inference + document helpers (single source of truth, reused by feature modules)
 const { getModel, generateText }   = require('./lib/llm');
 const { extractFileText }          = require('./lib/extract');
@@ -71,12 +79,10 @@ ${text.slice(0, 3000)}`;
   }
 }
 
+const { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES } = require('./lib/limits');
+
 const app    = express();
-// Uploads are buffered in memory (multer.memoryStorage), so the limit doubles as
-// a memory guard. Default 25 MB keeps a single upload from OOM-killing the process
-// on a memory-capped host; raise MAX_UPLOAD_MB where you have headroom (e.g. a VPS).
-const MAX_UPLOAD_MB = parseInt(process.env.MAX_UPLOAD_MB || '25', 10);
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));

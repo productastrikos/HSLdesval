@@ -8,3 +8,6 @@ server/.env
 # Runtime logs
 *.log
 *.err
+
+# Auto-generated auth secret (never commit)
+server/data/.jwt-secret

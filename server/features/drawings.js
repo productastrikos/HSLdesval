@@ -22,9 +22,10 @@ const multer  = require('multer');
 
 const { getModel, generateJSON, generateJSONFromParts } = require('../lib/llm');
 const { mapLimit } = require('./_util');
+const { MAX_UPLOAD_BYTES } = require('../lib/limits');
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
 
 const CONCURRENCY = parseInt(process.env.DRAWING_CONCURRENCY || '3', 10);
 const IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff']);

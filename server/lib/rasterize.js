@@ -8,6 +8,29 @@
 // model as images for information extraction.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Canvas loader (native @napi-rs/canvas, prebuilt per-platform) ─────────────
+// Renders PDF pages to images for the vision-OCR fallback. The binary is
+// platform-specific, so it MUST be installed on the deployment host (not just the
+// dev machine). If it is missing we log a loud, specific error — otherwise scanned
+// PDFs silently extract to empty and surface as "Could not read this file".
+let _canvas;   // undefined = not yet tried, null = unavailable
+function getCanvas() {
+  if (_canvas === undefined) {
+    try {
+      _canvas = require('@napi-rs/canvas');
+    } catch (err) {
+      _canvas = null;
+      console.error(
+        '[rasterize] @napi-rs/canvas could not be loaded — scanned / image-only PDF pages ' +
+        'cannot be rendered for OCR, so such documents will extract to empty text. ' +
+        'Ensure it is installed for THIS platform on the host (run "npm install" in server/ ' +
+        'on the deployment machine). Detail: ' + err.message,
+      );
+    }
+  }
+  return _canvas;
+}
+
 let _pdfjs = null;
 async function getPdfjs() {
   if (!_pdfjs) {
@@ -54,8 +77,13 @@ async function extractPdfPageTexts(buffer) {
  * @param {number}   [opts.maxPages] hard cap on number of pages rendered (default 12)
  * @param {number}   [opts.scale]   render scale (default 2.0 — good legibility for OCR)
  */
-async function rasterizePdfToPngs(buffer, { pages, maxPages = 12, scale = 2.0 } = {}) {
-  const { createCanvas } = require('@napi-rs/canvas');
+async function rasterizePdfToPngs(buffer, { pages, maxPages = 12, scale } = {}) {
+  const canvasMod = getCanvas();
+  if (!canvasMod) return [];              // already logged the reason in getCanvas()
+  const { createCanvas } = canvasMod;
+  // Render scale: lower it (env EXTRACT_RENDER_SCALE) on memory-tight hosts where
+  // large drawing pages can exhaust RAM during rasterisation.
+  if (scale == null) scale = parseFloat(process.env.EXTRACT_RENDER_SCALE || '2.0');
   const doc = await loadDocument(buffer);
 
   let target = pages && pages.length
@@ -72,7 +100,7 @@ async function rasterizePdfToPngs(buffer, { pages, maxPages = 12, scale = 2.0 } 
       const context = canvas.getContext('2d');
       await page.render({ canvasContext: context, viewport }).promise;
       out.push({ page: p, data: canvas.toBuffer('image/png').toString('base64') });
-    } catch (_) { /* skip unrenderable page */ }
+    } catch (err) { console.warn(`[rasterize] page ${p} could not be rendered:`, err.message); }
   }
   try { await doc.destroy(); } catch (_) {}
   return out;
