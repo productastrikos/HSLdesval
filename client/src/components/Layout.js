@@ -208,9 +208,9 @@ export default function Layout({ children, user, onLogout, theme = 'dark', onThe
           title="HSL Design Validator — by Astrikos"
         >
           <img
-            src="/astrikos-logo.jpg"
+            src="/astrikos-logo.png"
             alt="Astrikos"
-            style={{ height: sidebarOpen ? 34 : 26, width: 'auto', maxWidth: sidebarOpen ? 58 : 40, objectFit: 'contain', borderRadius: 6, flexShrink: 0 }}
+            style={{ height: sidebarOpen ? 30 : 20, width: 'auto', maxWidth: sidebarOpen ? 76 : 40, objectFit: 'contain', flexShrink: 0 }}
           />
           {sidebarOpen && (
             <div className="min-w-0 pl-2.5 border-l" style={{ borderColor: 'var(--app-border)' }}>

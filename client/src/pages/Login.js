@@ -184,7 +184,7 @@ export default function Login() {
         {/* Maker attribution — designed & developed by Astrikos */}
         <div className="flex flex-col items-center gap-1.5 mt-6">
           <span className="text-[9px] uppercase tracking-widest" style={{ color: 'var(--app-text-faint, #6b7280)' }}>Designed &amp; developed by</span>
-          <img src="/astrikos-logo.jpg" alt="Astrikos" style={{ height: 50, width: 'auto', maxWidth: 170, objectFit: 'contain', borderRadius: 6, opacity: 0.97 }} />
+          <img src="/astrikos-logo.png" alt="Astrikos" style={{ height: 46, width: 'auto', maxWidth: 180, objectFit: 'contain' }} />
         </div>
       </div>
     </div>
