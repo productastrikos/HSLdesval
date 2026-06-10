@@ -10,7 +10,7 @@
 
 const express = require('express');
 const { generateJSON } = require('../lib/llm');
-const { resolveDocText, ragContextBlock } = require('./_util');
+const { resolveDocText, ragContextBlock, resolveSystemName, systemSimilarity, normalizeSystem } = require('./_util');
 const store = require('../lib/store');
 
 const router = express.Router();
@@ -35,10 +35,25 @@ router.post('/checklist', async (req, res) => {
       } catch (_) { /* optional */ }
     }
 
-    // Historical lessons for this system → recurring deficiencies
-    const terms = `${system} ${domain} ${scope}`.toLowerCase().split(/\s+/).filter(Boolean);
-    const lessons = store.readAll('lessons')
-      .map(l => ({ l, s: terms.reduce((n, t) => n + (`${l.system} ${l.observation} ${l.category} ${l.project}`.toLowerCase().includes(t) ? 1 : 0), 0) }))
+    // Resolve a possibly slightly-off system name against the systems we actually
+    // have history for, so a typo/abbreviation ("steerring gear" → "Steering gear")
+    // still grounds the review in the right lessons instead of silently finding none.
+    const allLessons = store.readAll('lessons');
+    const knownSystems = [...new Set(allLessons.map(l => l.system).filter(Boolean))];
+    const sys = resolveSystemName(system, knownSystems);
+    const effectiveSystem = sys.resolved;   // a known system when confident, else as typed
+
+    // Historical lessons for this system → recurring deficiencies. Matched fuzzily:
+    // a lesson whose system is ~the same scores strongly even with a typo, plus any
+    // domain/scope term hits in the lesson text.
+    const extraTerms = [...new Set(normalizeSystem(`${effectiveSystem} ${domain} ${scope}`).split(' '))].filter(t => t.length > 2);
+    const lessons = allLessons
+      .map(l => {
+        let s = systemSimilarity(l.system, effectiveSystem) >= 0.6 ? 3 : 0;
+        const hay = normalizeSystem(`${l.system} ${l.observation} ${l.category} ${l.project}`);
+        for (const t of extraTerms) if (hay.includes(t)) s += 1;
+        return { l, s };
+      })
       .sort((a, b) => b.s - a.s)
       .filter(x => x.s > 0)
       .slice(0, 15)
@@ -46,7 +61,7 @@ router.post('/checklist', async (req, res) => {
 
     // Recurrence tally by observation theme
     const recur = {};
-    for (const l of store.readAll('lessons')) {
+    for (const l of allLessons) {
       const key = (l.observation || '').toLowerCase().slice(0, 40);
       if (!key) continue;
       recur[key] = recur[key] || { count: 0, sample: l.observation, category: l.category };
@@ -61,9 +76,14 @@ router.post('/checklist', async (req, res) => {
       ? recurring.map(r => `- ${r.sample} (seen ${r.count}× · ${r.category})`).join('\n')
       : '(No recurring deficiencies detected yet.)';
 
-    const { block: ruleBlock, citations } = await ragContextBlock(`${system} ${domain} design review requirements`, 8, { domain: domain || undefined });
+    const { block: ruleBlock, citations } = await ragContextBlock(`${effectiveSystem} ${domain} design review requirements`, 8, { domain: domain || undefined });
 
-    const prompt = `Prepare a system design review for: "${system}"${domain ? ` (domain: ${domain})` : ''}${scope ? `\nReview scope/notes: ${scope}` : ''}.
+    const systemForPrompt = sys.matched
+      ? `"${system}" (interpreted as the standard system "${effectiveSystem}")`
+      : `"${system}"`;
+
+    const prompt = `Prepare a system design review for: ${systemForPrompt}${domain ? ` (domain: ${domain})` : ''}${scope ? `\nReview scope/notes: ${scope}` : ''}.
+The system name may contain a typo, abbreviation or shipyard shorthand — interpret it as the closest standard marine/ship system and proceed; never refuse or ask for clarification.
 ${docBlock}
 APPLICABLE RULES / STANDARDS:
 ${ruleBlock || '(none retrieved)'}
@@ -92,7 +112,7 @@ Return JSON:
     "reference":        ""
   } ]
 }
-- Make the checklist genuinely specific to "${system}" (15-30 items across multiple areas), not generic.
+- Make the checklist genuinely specific to "${effectiveSystem}" (15-30 items across multiple areas), not generic.
 - Derive risks especially from the historical lessons and recurring deficiencies; mark "recurring":"yes" for those.
 Output ONLY the JSON.`;
 
@@ -101,7 +121,10 @@ Output ONLY the JSON.`;
     const risks     = (Array.isArray(out.risks) ? out.risks : []).map((r, i) => ({ slNo: i + 1, ...r }));
 
     res.json({
-      system, domain, scope,
+      system,
+      resolvedSystem:    effectiveSystem,
+      systemInterpreted: sys.matched,        // true when the typed name was corrected to a known system
+      domain, scope,
       checklist,
       risks,
       checklistCount: checklist.length,

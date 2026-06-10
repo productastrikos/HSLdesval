@@ -51,6 +51,11 @@ export default function DesignReview() {
       {res && (
         <>
           <Card title="Summary">
+            {res.systemInterpreted && res.resolvedSystem && (
+              <div className="text-[11px] text-amber-300/90 bg-amber-500/[0.08] border border-amber-500/25 rounded-lg px-3 py-1.5 mb-1">
+                Read “{res.system}” as <span className="font-semibold">{res.resolvedSystem}</span> to match historical lessons. If that’s not the system you meant, refine the name and re-run.
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
               <StatTile label="Checklist Items" value={res.checklistCount} tone="sky" />
               <StatTile label="Risks Identified" value={res.riskCount} tone="amber" />

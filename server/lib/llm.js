@@ -32,6 +32,13 @@ const MAX_COMPLETION = parseInt(process.env.LLM_MAX_TOKENS || '8000', 10);
 // until the host's proxy kills the whole request. Keep it under the platform's
 // gateway timeout (Hostinger/LiteSpeed is typically ~100s).
 const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '100000', 10);
+// Transient-failure resilience: a brief network blip ("fetch failed") or a
+// 429/5xx from the upstream is retried with exponential backoff + jitter rather
+// than surfacing as a hard error. Total attempts = LLM_MAX_RETRIES + 1. A whole
+// endpoint (e.g. design review) makes many such calls, so one hiccup must not
+// sink the request. Timeouts and client errors (4xx≠429) are NOT retried.
+const LLM_MAX_RETRIES   = parseInt(process.env.LLM_MAX_RETRIES   || '2', 10);
+const LLM_RETRY_BASE_MS = parseInt(process.env.LLM_RETRY_BASE_MS || '500', 10);
 // Vision models accept only a handful of images per request — keep within that.
 const MAX_VISION_PAGES = parseInt(process.env.LLM_MAX_VISION_PAGES || '5', 10);
 const MAX_IMAGES_PER_REQUEST = 5;
@@ -97,6 +104,11 @@ function inferenceError(message, status) {
   return err;
 }
 
+// Upstream statuses worth retrying: rate-limit (429) and transient 5xx. Other
+// 4xx are caller errors (bad request / auth) and must fail fast.
+const RETRYABLE_HTTP = new Set([429, 500, 502, 503, 504]);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function callEngine(messages, { json = false, vision = false, maxOutputTokens = 4096, temperature = 0.2 } = {}) {
   if (!ENGINE_KEY) throw inferenceError('The local inference engine is not configured.', 503);
   // Built-in fetch requires Node 18+. A clear message beats a cryptic ReferenceError.
@@ -113,40 +125,64 @@ async function callEngine(messages, { json = false, vision = false, maxOutputTok
   // Structured-output mode is reliable for text requests; vision requests rely on
   // prompt discipline + tolerant parsing instead.
   if (json && !vision) body.response_format = { type: 'json_object' };
+  const payload = JSON.stringify(body);
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
-  let res;
-  try {
-    res = await fetch(ENGINE_URL, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ENGINE_KEY}` },
-      body:    JSON.stringify(body),
-      signal:  controller.signal,
-    });
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      console.error(`[inference] request timed out after ${LLM_TIMEOUT_MS}ms`);
-      throw inferenceError('The inference request timed out. Try again, or use a smaller document / fewer pages.', 504);
+  // Retry transient failures (transport "fetch failed", 429/5xx) with backoff.
+  let lastReason = 'unknown error';
+  for (let attempt = 0; attempt <= LLM_MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const wait = LLM_RETRY_BASE_MS * 2 ** (attempt - 1) + Math.floor(Math.random() * 200);
+      console.warn(`[inference] ${lastReason} — retry ${attempt}/${LLM_MAX_RETRIES} in ${wait}ms`);
+      await sleep(wait);
     }
-    console.error('[inference] transport error:', err.message);
-    throw inferenceError('The local inference engine is unreachable.', 502);
-  } finally {
-    clearTimeout(timer);
-  }
 
-  if (!res.ok) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
+    let res;
+    try {
+      res = await fetch(ENGINE_URL, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ENGINE_KEY}` },
+        body:    payload,
+        signal:  controller.signal,
+      });
+    } catch (err) {
+      // A timeout already consumed the full budget — retrying only doubles the
+      // wait, so fail fast.
+      if (err.name === 'AbortError') {
+        console.error(`[inference] request timed out after ${LLM_TIMEOUT_MS}ms`);
+        throw inferenceError('The inference request timed out. Try again, or use a smaller document / fewer pages.', 504);
+      }
+      // Transport error (DNS/connection/TLS) — transient; retry if budget remains.
+      lastReason = `transport error: ${err.message}`;
+      console.error(`[inference] ${lastReason}`);
+      if (attempt < LLM_MAX_RETRIES) continue;
+      throw inferenceError('The local inference engine is unreachable.', 502);
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (res.ok) {
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content || '';
+    }
+
     let detail = '';
     try { const j = await res.json(); detail = j.error?.message || JSON.stringify(j); }
     catch (_) { detail = await res.text().catch(() => ''); }
     console.error(`[inference] HTTP ${res.status}: ${detail}`);
+
+    if (RETRYABLE_HTTP.has(res.status) && attempt < LLM_MAX_RETRIES) {
+      lastReason = `HTTP ${res.status}`;
+      continue;
+    }
     // 429 (rate/quota) is transient — signal "service unavailable, retry".
     const status = res.status === 429 ? 503 : 502;
     throw inferenceError(`The local inference engine returned an error (HTTP ${res.status}).`, status);
   }
 
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
+  // Unreachable in practice (loop either returns or throws), but keep it total.
+  throw inferenceError('The local inference engine is unreachable.', 502);
 }
 
 // ── Model handle (uniform surface used across the codebase) ───────────────────
