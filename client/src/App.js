@@ -17,8 +17,11 @@ import TechnicalOffer    from './pages/TechnicalOffer';
 import BindingData       from './pages/BindingData';
 import PreBidQueries     from './pages/PreBidQueries';
 import DesignReview      from './pages/DesignReview';
-import { getBaseKnowledge } from './services/aiService';
-import { hasBaseDocs, cacheBaseDocs } from './services/docStore';
+import Converter         from './pages/Converter';
+import DocumentWorker    from './pages/DocumentWorker';
+import BomGenerator      from './pages/BomGenerator';
+import { getBaseKnowledge, getLibrary } from './services/aiService';
+import { hasBaseDocs, cacheBaseDocs, hasLibraryDocs, cacheLibraryDocs } from './services/docStore';
 
 // On first authenticated load on this machine, parse + cache the built-in
 // knowledge-base documents in the browser so they persist across all sessions.
@@ -38,6 +41,23 @@ function useBaseKnowledgeCache(user) {
   }, [user]);
 }
 
+// On first authenticated load, fetch the pre-parsed HSL document library and cache
+// it in the browser so every module has documents ready (no upload needed at demo).
+function useLibraryCache(user) {
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (await hasLibraryDocs()) return;
+        const { docs } = await getLibrary();
+        if (!cancelled && docs?.length) await cacheLibraryDocs(docs);
+      } catch (_) { /* will retry next session */ }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+}
+
 // Guard that redirects non-admins back to dashboard
 function AdminRoute({ children }) {
   const { user } = useAuth();
@@ -51,6 +71,7 @@ function AppRoutes() {
   const location = useLocation();
 
   useBaseKnowledgeCache(user);
+  useLibraryCache(user);
 
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('app_theme');
@@ -92,8 +113,11 @@ function AppRoutes() {
         <Route path="/"              element={<Dashboard />} />
         <Route path="/chatbot"       element={<Chatbot />} />
         <Route path="/documents"     element={<Documents />} />
+        <Route path="/converter"     element={<Converter />} />
+        <Route path="/doc-worker"    element={<DocumentWorker />} />
         <Route path="/drawings"      element={<DrawingExtract />} />
         <Route path="/inspection"    element={<InspectionReports />} />
+        <Route path="/bom"           element={<BomGenerator />} />
         <Route path="/lessons"       element={<LessonsLearned />} />
         <Route path="/compliance"    element={<TechnicalOffer />} />
         <Route path="/binding"       element={<BindingData />} />

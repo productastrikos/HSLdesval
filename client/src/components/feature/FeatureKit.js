@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { downloadXlsx } from '../../services/featureApi';
-import { listUserDocs, getUserDoc } from '../../services/docStore';
+import React, { useState, useEffect, useRef } from 'react';
+import { downloadXlsx, downloadWord, sendFeedback } from '../../services/featureApi';
+import { chat } from '../../services/aiService';
+import { listSelectableDocs, getSelectableDoc } from '../../services/docStore';
 
 /* ─── Layout primitives ──────────────────────────────────────────────────── */
 export function Page({ title, subtitle, children, actions }) {
@@ -106,20 +107,20 @@ const PILL_COLS = /sever|status|risk|likeli|impact|recurring|priority|type|categ
 /* ─── Document source: pick one of the user's uploaded documents ──────────────
    Documents are uploaded once on the Documents page and persist (in the browser)
    for the rest of the session. Every feature selects from that shared list. */
-export function DocSource({ label, value, onChange }) {
+export function DocSource({ label, value, onChange, filter }) {
   const [docs, setDocs] = useState([]);
 
   useEffect(() => {
-    const load = () => listUserDocs().then(setDocs).catch(() => setDocs([]));
+    const load = () => listSelectableDocs().then(all => setDocs(filter ? all.filter(filter) : all)).catch(() => setDocs([]));
     load();
     window.addEventListener('docstore:changed', load);
     return () => window.removeEventListener('docstore:changed', load);
-  }, []);
+  }, [filter]);
 
   const onPick = async (id) => {
     if (!id) { onChange(null); return; }
-    const d = await getUserDoc(id);
-    if (d) onChange({ id: d.id, name: d.name, text: d.text });
+    const d = await getSelectableDoc(id);
+    if (d) onChange({ id: d.id, name: d.name, text: d.text, libraryFile: d.libraryFile, source: d.source });
   };
 
   return (
@@ -127,7 +128,7 @@ export function DocSource({ label, value, onChange }) {
       <label className="text-[11px] font-semibold text-slate-300">{label}</label>
       {docs.length === 0 ? (
         <div className="text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700">
-          No documents yet — upload one on the <span className="text-sky-400">Documents</span> page.
+          No documents available — upload one on the <span className="text-sky-400">Documents</span> page (the HSL library loads automatically).
         </div>
       ) : (
         <select
@@ -135,8 +136,13 @@ export function DocSource({ label, value, onChange }) {
           onChange={(e) => onPick(e.target.value)}
           className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-[11px] text-slate-200"
         >
-          <option value="">Select an uploaded document…</option>
-          {docs.map(d => <option key={d.id} value={d.id}>{d.name} · {d.type}</option>)}
+          <option value="">Select a document…</option>
+          <optgroup label="Your uploads">
+            {docs.filter(d => d.source === 'user').map(d => <option key={d.id} value={d.id}>{d.name} · {d.type}</option>)}
+          </optgroup>
+          <optgroup label="HSL Library (pre-loaded)">
+            {docs.filter(d => d.source === 'library').map(d => <option key={d.id} value={d.id}>{d.name} · {d.type}</option>)}
+          </optgroup>
         </select>
       )}
       {value && <div className="text-[10px] text-emerald-400">✓ {value.name}{value.text ? ` · ${(value.text.length / 1000).toFixed(0)}k chars` : ''}</div>}
@@ -144,9 +150,56 @@ export function DocSource({ label, value, onChange }) {
   );
 }
 
+/* ─── Multi document source: select several documents at once ──────────────── */
+export function MultiDocSource({ label, values = [], onChange, filter }) {
+  const [docs, setDocs] = useState([]);
+
+  useEffect(() => {
+    const load = () => listSelectableDocs().then(all => setDocs(filter ? all.filter(filter) : all)).catch(() => setDocs([]));
+    load();
+    window.addEventListener('docstore:changed', load);
+    return () => window.removeEventListener('docstore:changed', load);
+  }, [filter]);
+
+  const toggle = async (id, on) => {
+    if (on) {
+      const d = await getSelectableDoc(id);
+      if (d) onChange([...values, { id: d.id, name: d.name, text: d.text, libraryFile: d.libraryFile, source: d.source }]);
+    } else {
+      onChange(values.filter(v => v.id !== id));
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <label className="text-[11px] font-semibold text-slate-300">{label}</label>
+      {docs.length === 0 ? (
+        <div className="text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700">
+          No documents available — upload one on the <span className="text-sky-400">Documents</span> page.
+        </div>
+      ) : (
+        <div className="max-h-44 overflow-y-auto rounded-lg bg-slate-900 border border-slate-700 divide-y divide-white/[0.05]">
+          {docs.map(d => {
+            const on = values.some(v => v.id === d.id);
+            return (
+              <label key={d.id} className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-slate-200 cursor-pointer hover:bg-white/[0.03]">
+                <input type="checkbox" checked={on} onChange={e => toggle(d.id, e.target.checked)} className="accent-sky-500" />
+                <span className="truncate flex-1">{d.name}</span>
+                <span className="text-[9px] text-slate-500 shrink-0">{d.type}{d.source === 'library' ? ' · lib' : ''}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+      {values.length > 0 && <div className="text-[10px] text-emerald-400">✓ {values.length} selected</div>}
+    </div>
+  );
+}
+
 /* ─── Result table with Excel export ─────────────────────────────────────── */
-export function ResultTable({ columns, rows, title, downloadName = 'export', sheetName = 'Sheet1', extraSheets = [], note }) {
+export function ResultTable({ columns, rows, title, downloadName = 'export', sheetName = 'Sheet1', extraSheets = [], note, enableWord = true }) {
   const [busy, setBusy] = useState(false);
+  const [wbusy, setWbusy] = useState(false);
   const [err, setErr]   = useState(null);
 
   const onDownload = async () => {
@@ -157,20 +210,40 @@ export function ResultTable({ columns, rows, title, downloadName = 'export', she
     setBusy(false);
   };
 
+  const onWord = async () => {
+    setWbusy(true); setErr(null);
+    try {
+      await downloadWord({ title: title || sheetName, columns, rows, filename: downloadName });
+    } catch (e) { setErr(e.message); }
+    setWbusy(false);
+  };
+
   if (!columns?.length) return null;
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="text-[11px] text-slate-400">{title} <span className="text-slate-500">· {rows.length} row{rows.length === 1 ? '' : 's'}</span></div>
-        <button
-          onClick={onDownload}
-          disabled={busy || !rows.length}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold hover:bg-emerald-500/25 transition-colors disabled:opacity-40"
-        >
-          {busy ? <Spinner /> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>}
-          Download Excel
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onDownload}
+            disabled={busy || !rows.length}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-semibold hover:bg-emerald-500/25 transition-colors disabled:opacity-40"
+          >
+            {busy ? <Spinner /> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>}
+            Excel
+          </button>
+          {enableWord && (
+            <button
+              onClick={onWord}
+              disabled={wbusy || !rows.length}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 text-sky-300 border border-sky-500/30 text-[11px] font-semibold hover:bg-sky-500/25 transition-colors disabled:opacity-40"
+            >
+              {wbusy ? <Spinner /> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+              Word
+            </button>
+          )}
+        </div>
       </div>
       <ErrorNote>{err}</ErrorNote>
       <div className="overflow-auto rounded-lg border border-app-border max-h-[60vh]">
@@ -211,5 +284,148 @@ export function Field({ label, value, onChange, placeholder, textarea, rows = 3 
           className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-[11px] text-slate-200 placeholder-slate-600" />
       )}
     </div>
+  );
+}
+
+/* ─── Continuous-learning feedback bar (shown under every AI output) ───────── */
+export function FeedbackBar({ module, subject = '' }) {
+  const [state, setState]     = useState('idle');   // idle | remarks | sent
+  const [remarks, setRemarks] = useState('');
+  const [busy, setBusy]       = useState(false);
+
+  const satisfied = async () => {
+    setBusy(true);
+    try { await sendFeedback({ module, rating: 'satisfied', subject }); } catch (_) {}
+    setBusy(false); setState('sent');
+  };
+  const submitRemarks = async () => {
+    setBusy(true);
+    try { await sendFeedback({ module, rating: 'not_satisfied', remarks, subject }); } catch (_) {}
+    setBusy(false); setState('sent');
+  };
+
+  if (state === 'sent') {
+    return <div className="text-[10px] text-emerald-400 flex items-center gap-1.5 pt-1">✓ Thank you — feedback recorded; it will guide future results in this module.</div>;
+  }
+
+  return (
+    <div className="pt-2 mt-1 border-t border-app-border space-y-2">
+      {state === 'idle' && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Was this useful?</span>
+          <button onClick={satisfied} disabled={busy}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-semibold hover:bg-emerald-500/25 disabled:opacity-40">
+            👍 Satisfied
+          </button>
+          <button onClick={() => setState('remarks')} disabled={busy}
+            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[10px] font-semibold hover:bg-amber-500/25 disabled:opacity-40">
+            👎 Not satisfied
+          </button>
+        </div>
+      )}
+      {state === 'remarks' && (
+        <div className="space-y-2">
+          <textarea value={remarks} onChange={e => setRemarks(e.target.value)} rows={2}
+            placeholder="What was wrong or what should change? (used to improve future results)"
+            className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-[11px] text-slate-200 placeholder-slate-600 resize-y" />
+          <div className="flex items-center gap-2">
+            <button onClick={submitRemarks} disabled={busy || !remarks.trim()}
+              className="px-3 py-1.5 rounded-lg bg-sky-500/15 text-sky-300 border border-sky-500/30 text-[10px] font-semibold hover:bg-sky-500/25 disabled:opacity-40 flex items-center gap-1.5">
+              {busy ? <Spinner /> : null} Submit feedback
+            </button>
+            <button onClick={() => setState('idle')} className="px-3 py-1.5 rounded-lg text-[10px] text-slate-400 hover:text-white">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Lightweight inline markdown-ish renderer for chat answers ────────────── */
+function ChatText({ text }) {
+  const lines = (text || '').split('\n');
+  return (
+    <div className="text-[12px] leading-relaxed text-slate-200 space-y-1">
+      {lines.map((line, i) => {
+        if (!line.trim()) return null;
+        if (/^#{1,3}\s/.test(line)) return <p key={i} className="font-bold text-white">{line.replace(/^#{1,3}\s/, '')}</p>;
+        if (/^\s*[-*•]\s/.test(line)) return <p key={i} className="pl-3">· {line.replace(/^\s*[-*•]\s/, '')}</p>;
+        const parts = line.split(/(\*\*[^*]+\*\*)/g);
+        return <p key={i}>{parts.map((p, j) => p.startsWith('**') && p.endsWith('**')
+          ? <strong key={j} className="text-white font-semibold">{p.slice(2, -2)}</strong> : p)}</p>;
+      })}
+    </div>
+  );
+}
+
+/* ─── Per-module chat assistant (prompt-driven, document-aware) ────────────── */
+export function ModuleChat({ module, title = 'Ask the Assistant', docText, docName, suggestions = [], placeholder }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput]       = useState('');
+  const [busy, setBusy]         = useState(false);
+  const endRef = useRef(null);
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, busy]);
+
+  const send = async (text) => {
+    const q = (text ?? input).trim();
+    if (!q || busy) return;
+    setInput('');
+    const history = [...messages, { role: 'user', content: q }];
+    setMessages(history);
+    setBusy(true);
+    try {
+      const resp = await chat(history.map(m => ({ role: m.role, content: m.content })), undefined, docText, docName);
+      setMessages(h => [...h, { role: 'assistant', content: resp.content, citations: resp.citations || [] }]);
+    } catch (e) {
+      setMessages(h => [...h, { role: 'assistant', content: `⚠ ${e.message}`, error: true }]);
+    }
+    setBusy(false);
+  };
+
+  return (
+    <Card title={title} desc={docName ? `Context: ${docName}` : 'Ask anything in the context of this module — grounded in the HSL knowledge base.'}>
+      {suggestions.length > 0 && messages.length === 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {suggestions.map((s, i) => (
+            <button key={i} onClick={() => send(s)} disabled={busy}
+              className="text-left text-[10px] px-2.5 py-1.5 rounded-lg bg-white/[0.02] border border-app-border hover:bg-sky-500/[0.06] hover:border-sky-500/30 text-slate-300 disabled:opacity-40">
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+      {messages.length > 0 && (
+        <div className="max-h-72 overflow-y-auto space-y-3 rounded-lg bg-slate-950/30 border border-app-border p-3">
+          {messages.map((m, i) => (
+            <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
+              <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold shrink-0 ${m.role === 'user' ? 'bg-slate-700 text-slate-200' : 'bg-gradient-to-br from-sky-500 to-indigo-500 text-white'}`}>{m.role === 'user' ? 'U' : 'AI'}</div>
+              <div className={`max-w-[85%] rounded-xl px-3 py-2 ${m.role === 'user' ? 'bg-slate-700/50' : m.error ? 'bg-red-500/10 border border-red-500/30' : 'bg-app-panel border border-app-border'}`}>
+                <ChatText text={m.content} />
+                {m.citations?.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {m.citations.map((c, j) => <span key={j} className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">{c}</span>)}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {busy && <div className="text-[10px] text-slate-500 flex items-center gap-1.5"><Spinner /> Thinking…</div>}
+          <div ref={endRef} />
+        </div>
+      )}
+      <div className="flex items-end gap-2">
+        <textarea
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+          rows={1}
+          placeholder={placeholder || 'Ask a question about this module…'}
+          className="flex-1 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-[12px] text-slate-200 placeholder-slate-600 resize-none max-h-28"
+        />
+        <button onClick={() => send()} disabled={busy || !input.trim()}
+          className="px-3 py-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 text-white text-[11px] font-semibold disabled:opacity-40 hover:opacity-90">Send</button>
+      </div>
+    </Card>
   );
 }

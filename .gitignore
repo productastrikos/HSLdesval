@@ -16,4 +16,11 @@ server/data/.jwt-secret
 # Kept out of the repo/deploy to stay lightweight (it is ~50 MB).
 server/rag/embcache/store.json
 
+# Pre-loaded document library text cache — regenerated on demand from HSLdocs.
+server/data/library-cache.json
+
+# Runtime feature data — populated by user activity; must not ship pre-populated.
+server/data/inspections.json
+server/data/feedback.json
+
 

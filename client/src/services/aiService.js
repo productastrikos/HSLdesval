@@ -93,6 +93,17 @@ export async function getBaseKnowledge() {
   return apiFetch('/base-knowledge');
 }
 
+// Pre-loaded HSL document library (parsed once server-side, cached in the browser
+// so every module has documents available without uploading).
+export async function getLibrary() {
+  return apiFetch('/library');
+}
+
+// Continuous-learning feedback on any AI output.
+export async function submitFeedback({ module, rating, remarks, subject }) {
+  return post('/feedback', { module, rating, remarks, subject });
+}
+
 export async function getKbStatus() {
   return apiFetch('/kb-status');
 }

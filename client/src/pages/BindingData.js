@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, DocSource, Field, Spinner } from '../components/feature/FeatureKit';
+import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, DocSource, Field, Spinner, FeedbackBar, ModuleChat } from '../components/feature/FeatureKit';
 import { bindingGap, docFields } from '../services/featureApi';
 
 const G_COLS = ['slNo', 'item', 'itemType', 'potsRef', 'status', 'finding', 'actionRequired'];
@@ -69,10 +69,24 @@ export default function BindingData() {
             <Card title="Points to Seek Before Approval">
               <ResultTable columns={R_HEAD} rows={recRows} title="Recommendations" sheetName="Recommendations"
                 downloadName={`BindingRecommendations_${(system || 'binding').replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`} />
+              <FeedbackBar module="binding" subject={`${res.pots} vs ${res.binding}`} />
             </Card>
           )}
         </>
       )}
+
+      <ModuleChat
+        module="binding"
+        title="Ask about the binding-data review"
+        docText={binding?.text}
+        docName={binding?.name}
+        placeholder="e.g. Which certificates are missing from the submission?"
+        suggestions={[
+          'What is missing from the vendor binding data?',
+          'List the documents to seek before approval.',
+          'Summarise the gaps against the POTS.',
+        ]}
+      />
     </Page>
   );
 }

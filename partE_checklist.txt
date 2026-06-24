@@ -1,0 +1,129 @@
+PART-E — FUNCTIONALITIES COMPLIANCE CHECKLIST
+
+1. Rules & Regulations Engineering Assistant
+       a. Trained on IRS Rules & Regulations (HSL/open source) - Yes
+       b. Answer user queries - Yes
+       c. Provide source references - Yes
+       d. Lessons-learnt-based suggestions - No
+       e. Support follow-up questions - Yes
+       f. Maintain feedback mechanism for each response - Yes
+
+2. BOM Generation from RFP/Build Specification
+       a. Read and understand uploaded Build Specification/RFP - Yes
+       b. Identify all systems and sub-systems specified - Yes
+       c. Automatically group BoM items discipline-wise - Yes
+       d. Generate system-wise & discipline-wise BoM in HSL format - Partial
+       e. Extract equipment descriptions, specs, units, quantities, remarks - Yes
+       f. Flag items with quantities not explicitly mentioned for estimation - Yes
+       g. Demonstrate engineering reasoning to estimate quantities - Yes
+       h. Demonstrate engineering-calculation use cases (Load/Generator, Engine, PA speakers, etc.) - Yes
+       i. Indicate basis of estimation, assumptions, calculations, refs, rules - Yes
+       j. Provide complete source traceability - Yes
+       k. Export BoM in Excel, Word, PDF - Partial
+
+3. SOTR / Tender Technical Specification Generation
+       a. Read and understand uploaded Build Specification/RFP - Yes
+       b. Identify selected system and its functional requirements - Yes
+       c. Utilize preliminary BoM (estimated quantities) for the SOTR - Yes
+       d. Auto-incorporate technical/performance/functional/inspection/testing/doc requirements & quantities - Yes
+       e. Incorporate applicable Rules & Regulations with references - Yes
+       f. Ensure consistency between Build Spec, BoM and SOTR - Yes
+       g. Export SOTR in Word and PDF - Partial
+
+4. Pre-Bid Query Generation
+       a. Generate Pre-Bid Queries from RFP - Yes
+       b. Identify ambiguities, inconsistencies, missing info and technical risks - Yes
+       c. Use Build specification of a Tug and sample format shared by HSL - Yes
+
+5. Technical Offer Evaluation
+       a. Upload Technical Offer and TTS/SOTR - Yes
+       b. Generate Technical Compliance Matrix - Yes
+       c. Identify deviations, exclusions and missing information - Yes
+       d. Suggest technical queries - Yes
+       e. Use SOTR of HDCS and Technical Offer of HDCS - Yes
+
+6. Binding Data Gap Analysis & Information Extraction
+       a. Compare Binding Data against POTS; identify missing docs and deviations - Yes
+       b. Extract info from Binding Data per user prompt, export to required format - Partial
+       c. Use Binding data and POTS of MB/SRE; output format shared by HSL - Yes
+
+7. Intelligent Document Converter
+       a. Accept single/multiple uploads (PDF, scanned, images, office docs) - Yes
+       b. Allow natural-language prompts specifying required output - Yes
+       c. Understand content via AI document intelligence (not mere OCR) - Yes
+       d. Extract structured info from specs, manuals, datasheets, reports, drawings, tables - Yes
+       e. Generate customized outputs (user-defined columns/formats) in Excel, Word, PDF - Partial
+       f. Document comparison feature per user prompt - Yes
+       g. Multi-document processing & consolidation - Yes
+
+8. Inspection Report Analytics
+       a. Extract & categorize observations, remarks, deficiencies - Yes
+       b. Generate system-, discipline-, project- and agency-wise analytics - Partial
+       c. Answer user queries on inspection data - No
+       d. Allow authorized status updates (Open/Under Action/Closed/Deferred) with audit trail - Partial
+       e. Configurable dashboards/analytics by project, system, discipline, agency, status, date - Partial
+       f. Provide source references for observations and reports - Yes
+       g. Export in Excel, Word, PDF - Partial
+
+9. Lessons Learnt Repository
+       a. Create and query a Lessons Learnt Repository - Yes
+       b. Use historical project docs, inspection reports, correspondence, vendor issues, records - Yes
+
+10. Engineering Drawing Intelligence
+       a. Accept drawings in PDF and DWG (workspace or upload) - Yes
+       b. Extract/interpret key info (equipment, tags, connections, annotations) - Yes
+       c. Understand basic drawing structure (schematics, layouts, interconnection diagrams) - Yes
+       d. Validate against Rules (IRS), Build Spec (Tug), Lessons Learnt, Binding data - Partial
+       e. Identify missing or inconsistent information - Yes
+       f. User-driven extraction via prompts (e.g. Cable Schedule, compartment list) - Yes
+       g. Provide source traceability (drawing name, sheet reference) - Yes
+       h. Export output in Excel / Word - Yes
+
+11. Design Review Assistant (Checklists & Risk Analysis)
+       a. Generate system-specific design review checklists from prompts - Yes
+       b. Identify key design risks, missing checks, critical review points - Yes
+       c. Provide references to applicable Rules & Regulations and documents - Yes
+       d. Answer queries on design review requirements - Yes
+
+12. Workspace Management
+       a. Hierarchical workspace - No
+       b. Project-wise repositories - No
+       c. Document upload, retrieval and search functionality - Yes
+
+13. Audit Log Management
+       a. Record user login/logout activities - No
+       b. Record searches, AI queries/prompts, generated responses - No
+       c. Record document uploads and downloads - No
+       d. Record updates to records (remark status, feedback submissions) - No
+       e. Capture user identity, date, time, module, action - No
+       f. Allow administrators to view and filter audit logs - No
+
+14. User Interaction History
+       a. Record searches, queries/prompts, AI-generated responses - Partial
+       b. Maintain interaction history across modules - No
+       c. Allow users to view/revisit previous interactions - Partial
+       d. Search/filter by date, module, keywords - No
+       e. Allow reuse or continuation of previous interactions - Partial
+
+15. Role-Based Access Control (RBAC) & User Management
+       a. Support multiple roles (Administrator, User) - Yes
+       b. Authenticate via secure login - Yes
+       c. Restrict access to modules, documents, projects by role/department - Partial
+       d. Department-wise access control - No
+       e. Admin create/modify/activate/deactivate user accounts - Partial
+       f. Ensure users access only authorized data/docs/AI functions - Partial
+       g. Maintain records of user access and activities - No
+
+16. User Feedback Mechanism
+       a. Feedback option available for every functionality - Yes
+       b. Options: Satisfied / Partially Satisfied / Not Satisfied - No
+       c. User Comments - Yes
+
+17. Ship Cost Estimation Assistant (second-phase selection)
+       a. Use AI-generated BoM as input for cost estimation - No
+       b. Identify approved vendors from a sample vendor database - No
+       c. Auto-prepare vendor-wise BQ enquiry documents/emails from the BoM - No
+       d. Generate enquiry docs/emails for Admin review & dispatch - No
+       e. Demonstrate preliminary cost estimation using dummy unit rates - No
+       f. Demonstrate auto-update of cost estimate using sample BQs - No
+       g. Provide system-/discipline-wise & overall cost summary with traceability - No

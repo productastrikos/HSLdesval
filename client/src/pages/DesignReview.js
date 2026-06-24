@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, DocSource, Field, Spinner } from '../components/feature/FeatureKit';
+import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, DocSource, Field, Spinner, FeedbackBar, ModuleChat } from '../components/feature/FeatureKit';
 import { designReview, docFields } from '../services/featureApi';
 
 const C_COLS = ['slNo', 'area', 'checkItem', 'reference', 'basis'];
@@ -76,10 +76,24 @@ export default function DesignReview() {
             <Card title="Risk Register">
               <ResultTable columns={R_HEAD} rows={riskRows} title="Risk Register" sheetName="Risk Register"
                 downloadName={`RiskRegister_${system.replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`} />
+              <FeedbackBar module="designreview" subject={system} />
             </Card>
           )}
         </>
       )}
+
+      <ModuleChat
+        module="designreview"
+        title="Ask about the design review"
+        docText={doc?.text}
+        docName={doc?.name}
+        placeholder="e.g. What are the top recurring risks for this system?"
+        suggestions={[
+          'What are the most common design deficiencies for this system?',
+          'List preventive measures for the top risks.',
+          'Which class rules apply to this system?',
+        ]}
+      />
     </Page>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { chat } from '../services/aiService';
-import { listUserDocs, getUserDoc } from '../services/docStore';
+import { listSelectableDocs, getSelectableDoc } from '../services/docStore';
 import { RULE_CORPUS, DOMAINS } from '../services/hslKnowledge';
 
 // ── Session persistence ───────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ function makeWelcomeMsg() {
     id:        'welcome-' + Date.now(),
     role:      'assistant',
     isWelcome: true,
-    content:   "Welcome to the HSL Design Assistant.\n\nI can help you interpret classification society rules (IRS/DNV/ABS/IACS), IMO and IEC regulations, and Naval standards. Ask me to validate Build Specifications, cross-reference design documents against compliance requirements, generate technical specs, or perform engineering calculations.\n\nSelect one of your uploaded documents as reference context, try a suggested prompt, or ask anything about your vessel design.",
+    content:   "Welcome to the HSL Design Assistant.\n\nI'm trained on the entire HSL document repository plus classification rules (IRS/DNV/ABS/IACS), IMO and IEC regulations and Naval standards, so I can cross-reference across all of them. Ask me to validate Build Specifications, compare documents, extract or estimate data, generate technical specs, or perform engineering calculations.\n\nSelect any pre-loaded or uploaded document as reference context, try a suggested prompt, or ask anything about your vessel design.",
     timestamp: new Date().toLocaleTimeString('en-IN', { hour12: false }),
     mode:      'ai',
   };
@@ -149,7 +149,7 @@ export default function Chatbot() {
   const endRef      = useRef(null);
 
   useEffect(() => {
-    const load = () => listUserDocs().then(setUserDocs).catch(() => setUserDocs([]));
+    const load = () => listSelectableDocs().then(setUserDocs).catch(() => setUserDocs([]));
     load();
     window.addEventListener('docstore:changed', load);
     return () => window.removeEventListener('docstore:changed', load);
@@ -212,7 +212,7 @@ export default function Chatbot() {
   // ── Reference document selection (from the user's uploaded documents) ────
   const handleDocSelect = async (id) => {
     if (!id) { setChatDoc(null); return; }
-    const d = await getUserDoc(id);
+    const d = await getSelectableDoc(id);
     if (!d) return;
     setChatDoc({
       id: d.id,

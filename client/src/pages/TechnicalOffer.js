@@ -1,78 +1,103 @@
 import React, { useState } from 'react';
-import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, DocSource, Field, Spinner } from '../components/feature/FeatureKit';
-import { complianceMatrix, docFields } from '../services/featureApi';
+import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, DocSource, MultiDocSource, Field, Spinner, FeedbackBar, ModuleChat } from '../components/feature/FeatureKit';
+import { complianceMatrix } from '../services/featureApi';
 
 const M_COLS = ['slNo', 'clauseRef', 'requirement', 'offerResponse', 'status', 'deviation', 'remarks'];
 const M_HEAD = ['Sl.No', 'Clause Ref', 'TTS Requirement', 'Offer Response', 'Status', 'Deviation / Exclusion / Assumption', 'Remarks'];
 const Q_COLS = ['slNo', 'clauseRef', 'category', 'query', 'rationale'];
 const Q_HEAD = ['Sl.No', 'Clause Ref', 'Category', 'Technical Query', 'Rationale'];
+const R_COLS = ['slNo', 'clauseRef', 'recommendation', 'action', 'priority'];
+const R_HEAD = ['Sl.No', 'Clause Ref', 'Recommendation', 'Action', 'Priority'];
 
 function remap(items, keys, heads) {
   return (items || []).map(o => { const r = {}; keys.forEach((k, i) => { r[heads[i]] = o[k] ?? ''; }); return r; });
 }
 
+function OfferResult({ system, r }) {
+  const matrixRows = remap(r.matrix, M_COLS, M_HEAD);
+  const queryRows  = remap(r.queries, Q_COLS, Q_HEAD);
+  const recRows    = remap(r.recommendations, R_COLS, R_HEAD);
+  const slug = (r.offer || 'offer').replace(/[^a-z0-9]+/gi, '_').slice(0, 24);
+  return (
+    <Card title={`Offer: ${r.offer}`} right={<span className="text-[11px] text-emerald-400 font-bold">{r.compliancePct}% compliant</span>}>
+      <div className="grid grid-cols-3 md:grid-cols-7 gap-2.5">
+        <StatTile label="Compliance" value={`${r.compliancePct}%`} tone="emerald" />
+        <StatTile label="Total" value={r.total} tone="sky" />
+        {Object.entries(r.stats || {}).map(([s, v]) => <StatTile key={s} label={s} value={v}
+          tone={{ 'Complied': 'emerald', 'Partially Complied': 'amber', 'Deviation': 'orange', 'Exclusion': 'red', 'Not Addressed': 'red', 'Ambiguous': 'violet' }[s] || 'slate'} />)}
+      </div>
+      <ResultTable columns={M_HEAD} rows={matrixRows} title="Technical Compliance Matrix" sheetName="Compliance Matrix"
+        downloadName={`Compliance_${slug}`}
+        extraSheets={[{ name: 'Technical Queries', columns: Q_HEAD, rows: queryRows }, { name: 'Recommendations', columns: R_HEAD, rows: recRows }]}
+        note="The Excel download also includes the technical queries and the explicit recommendations sheets." />
+      {recRows.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[11px] font-bold text-white">Recommendations (explicit actions — e.g. “Seek this document from the vendor”)</div>
+          <ResultTable columns={R_HEAD} rows={recRows} title="Recommendations" sheetName="Recommendations" downloadName={`Recommendations_${slug}`} />
+        </div>
+      )}
+      <FeedbackBar module="compliance" subject={`${system} · ${r.offer}`} />
+    </Card>
+  );
+}
+
 export default function TechnicalOffer() {
-  const [tts, setTts]     = useState(null);
-  const [offer, setOffer] = useState(null);
+  const [tts, setTts]       = useState(null);
+  const [offers, setOffers] = useState([]);
   const [system, setSystem] = useState('');
-  const [busy, setBusy]   = useState(false);
-  const [error, setError] = useState(null);
-  const [res, setRes]     = useState(null);
+  const [busy, setBusy]     = useState(false);
+  const [error, setError]   = useState(null);
+  const [res, setRes]       = useState(null);
 
   const run = async () => {
-    if (!tts || !offer) { setError('Provide both the TTS/SOTR and the vendor technical offer.'); return; }
+    if (!tts || !offers.length) { setError('Provide the TTS/SOTR and at least one vendor technical offer.'); return; }
     setBusy(true); setError(null); setRes(null);
     try {
-      setRes(await complianceMatrix({ system, ...docFields('tts', tts), ...docFields('offer', offer) }));
+      setRes(await complianceMatrix({
+        system,
+        ttsText: tts.text, ttsName: tts.name,
+        offers: offers.map(o => ({ name: o.name, text: o.text })),
+      }));
     } catch (e) { setError(e.message); }
     setBusy(false);
   };
 
-  const matrixRows = remap(res?.matrix, M_COLS, M_HEAD);
-  const queryRows  = remap(res?.queries, Q_COLS, Q_HEAD);
-
   return (
     <Page
       title="Technical Offer Scrutiny"
-      subtitle="Review a vendor technical offer against the Tender Technical Specification (TTS / SOTR). Auto-prepare a clause-by-clause Technical Compliance Matrix, flag deviations / exclusions / assumptions / ambiguities / non-compliances, and generate technical queries for the vendor."
+      subtitle="Review one or MORE vendor technical offers against the Tender Technical Specification (TTS / SOTR). Auto-prepare a clause-by-clause Technical Compliance Matrix, flag deviations / exclusions / ambiguities, generate vendor queries, and produce explicit recommendations (e.g. “Seek this document from the vendor”) in the Excel output."
     >
-      <Card title="Documents" desc="Provide the TTS/SOTR and the vendor's technical offer (upload, or pick from the knowledge base).">
+      <Card title="Documents" desc="Provide the TTS/SOTR and one or more vendor technical offers (select multiple to compare).">
         <div className="grid md:grid-cols-2 gap-5">
           <DocSource label="Tender Technical Specification (TTS / SOTR)" value={tts} onChange={setTts} />
-          <DocSource label="Vendor Technical Offer" value={offer} onChange={setOffer} />
+          <MultiDocSource label="Vendor Technical Offer(s)" values={offers} onChange={setOffers} />
         </div>
         <Field label="System (optional)" value={system} onChange={setSystem} placeholder="e.g. HDCS / DGPS / EM Log" />
-        <RunButton onClick={run} busy={busy} busyLabel="Building compliance matrix…">Generate Compliance Matrix</RunButton>
+        <RunButton onClick={run} busy={busy} busyLabel="Building compliance matrices…">{offers.length > 1 ? `Evaluate ${offers.length} Offers` : 'Generate Compliance Matrix'}</RunButton>
         <ErrorNote>{error}</ErrorNote>
-        {busy && <div className="text-[10px] text-slate-500 flex items-center gap-1.5"><Spinner /> Each TTS section is assessed against the offer — this can take a minute.</div>}
+        {busy && <div className="text-[10px] text-slate-500 flex items-center gap-1.5"><Spinner /> Each TTS section is assessed against every offer — this can take a minute.</div>}
       </Card>
 
       {res && (
         <>
-          <Card title="Compliance Summary" right={<span className="text-[11px] text-slate-400">{res.tts} vs {res.offer}</span>}>
-            <div className="grid grid-cols-3 md:grid-cols-7 gap-2.5">
-              <StatTile label="Compliance" value={`${res.compliancePct}%`} tone="emerald" />
-              <StatTile label="Total" value={res.total} tone="sky" />
-              {res.statuses.map(s => <StatTile key={s} label={s} value={res.stats[s] || 0}
-                tone={{ 'Complied': 'emerald', 'Partially Complied': 'amber', 'Deviation': 'orange', 'Exclusion': 'red', 'Not Addressed': 'red', 'Ambiguous': 'violet' }[s] || 'slate'} />)}
-            </div>
-          </Card>
-
-          <Card title="Technical Compliance Matrix">
-            <ResultTable columns={M_HEAD} rows={matrixRows} title="Compliance Matrix" sheetName="Compliance Matrix"
-              downloadName={`Compliance_${(system || res.offer || 'offer').replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`}
-              extraSheets={[{ name: 'Technical Queries', columns: Q_HEAD, rows: queryRows }]}
-              note="The Excel download includes a second sheet with the technical queries." />
-          </Card>
-
-          {queryRows.length > 0 && (
-            <Card title="Technical Queries for Vendor">
-              <ResultTable columns={Q_HEAD} rows={queryRows} title="Technical Queries" sheetName="Technical Queries"
-                downloadName={`Queries_${(system || res.offer || 'offer').replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`} />
-            </Card>
-          )}
+          <div className="text-[11px] text-slate-400">TTS: <span className="text-slate-200">{res.tts}</span> · {res.offerCount} offer{res.offerCount === 1 ? '' : 's'} evaluated</div>
+          {res.results.map((r, i) => <OfferResult key={i} system={res.system} r={r} />)}
+          {res.citations?.length > 0 && <div className="text-[10px] text-slate-500">Grounded in: {res.citations.join(' · ')}</div>}
         </>
       )}
+
+      <ModuleChat
+        module="compliance"
+        title="Ask about the offer scrutiny"
+        docText={tts?.text}
+        docName={tts?.name}
+        placeholder="e.g. Which offer best meets the redundancy requirement?"
+        suggestions={[
+          'What documents should we seek from the vendor before award?',
+          'Summarise the key deviations across the offers.',
+          'Which requirements are not addressed by any offer?',
+        ]}
+      />
     </Page>
   );
 }

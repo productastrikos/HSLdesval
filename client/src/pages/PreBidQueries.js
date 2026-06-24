@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, DocSource, Field, Spinner } from '../components/feature/FeatureKit';
+import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, DocSource, Field, Spinner, FeedbackBar, ModuleChat } from '../components/feature/FeatureKit';
 import { prebidQueries, docFields } from '../services/featureApi';
 
-const COLS = ['slNo', 'clauseRef', 'category', 'query', 'rationale', 'risk'];
-const HEAD = ['Sl.No', 'Clause / Ref', 'Category', 'Pre-Bid Query', 'Rationale', 'Risk'];
+const COLS = ['slNo', 'clauseRef', 'pageNumber', 'clauseDescription', 'category', 'query', 'rationale', 'risk'];
+const HEAD = ['Sl.No', 'Clause / Ref', 'Page Number', 'Clause Description', 'Category', 'Pre-Bid Query', 'Rationale', 'Risk'];
 
 export default function PreBidQueries() {
   const [rfp, setRfp]     = useState(null);
@@ -13,7 +13,7 @@ export default function PreBidQueries() {
   const [res, setRes]     = useState(null);
 
   const run = async () => {
-    if (!rfp) { setError('Provide the RFP / tender document.'); return; }
+    if (!rfp) { setError('Provide the RFP / tender / build specification document.'); return; }
     setBusy(true); setError(null); setRes(null);
     try { setRes(await prebidQueries({ focus, ...docFields('rfp', rfp) })); }
     catch (e) { setError(e.message); }
@@ -25,14 +25,14 @@ export default function PreBidQueries() {
   return (
     <Page
       title="Pre-Bid Query Generation"
-      subtitle="Analyse an RFP / tender — specifications, standards and contractual requirements — against historical lessons and applicable rules, and automatically generate technically relevant pre-bid queries. Surfaces ambiguities, contradictions, missing information, impractical requirements and execution risks."
+      subtitle="Analyse an RFP / tender / Build Specification against historical lessons and applicable rules, and automatically generate pre-bid queries — surfacing ambiguities, contradictions, missing information, impractical requirements and execution risks. The Excel download includes Page Number and Clause Description columns."
     >
-      <Card title="RFP / Tender Document" desc="Upload the RFP (any open-source ship RFP works for a demo) or pick from the knowledge base.">
-        <DocSource label="RFP / Tender" value={rfp} onChange={setRfp} />
+      <Card title="RFP / Tender / Build Specification" desc="Pick the document (e.g. the pre-loaded Build Specification of Tugs) or one you uploaded.">
+        <DocSource label="RFP / Tender / Build Spec" value={rfp} onChange={setRfp} />
         <Field label="Bid focus (optional)" value={focus} onChange={setFocus} placeholder="e.g. electrical scope, propulsion, hull outfitting" />
-        <RunButton onClick={run} busy={busy} busyLabel="Analysing RFP…">Generate Pre-Bid Queries</RunButton>
+        <RunButton onClick={run} busy={busy} busyLabel="Analysing document…">Generate Pre-Bid Queries</RunButton>
         <ErrorNote>{error}</ErrorNote>
-        {busy && <div className="text-[10px] text-slate-500 flex items-center gap-1.5"><Spinner /> Reading the RFP section-by-section for ambiguities, contradictions and risks.</div>}
+        {busy && <div className="text-[10px] text-slate-500 flex items-center gap-1.5"><Spinner /> Reading section-by-section for ambiguities, contradictions and risks (with page numbers).</div>}
       </Card>
 
       {res && (
@@ -49,9 +49,23 @@ export default function PreBidQueries() {
             <ResultTable columns={HEAD} rows={rows} title="Pre-Bid Queries" sheetName="Pre-Bid Queries"
               downloadName={`PreBidQueries_${(res.rfp || 'rfp').replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`} />
             {res.citations?.length > 0 && <div className="text-[10px] text-slate-500 mt-2">Grounded in: {res.citations.join(' · ')}</div>}
+            <FeedbackBar module="prebid" subject={res.rfp} />
           </Card>
         </>
       )}
+
+      <ModuleChat
+        module="prebid"
+        title="Ask about this RFP / specification"
+        docText={rfp?.text}
+        docName={rfp?.name}
+        placeholder="e.g. What are the riskiest clauses to clarify before bidding?"
+        suggestions={[
+          'List the most critical ambiguities in this document.',
+          'What information is missing that we must request?',
+          'Which requirements look technically impractical?',
+        ]}
+      />
     </Page>
   );
 }

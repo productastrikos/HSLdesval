@@ -11,6 +11,7 @@
 const express = require('express');
 const { generateJSON } = require('../lib/llm');
 const { resolveDocText, ragContextBlock, resolveSystemName, systemSimilarity, normalizeSystem } = require('./_util');
+const { getFeedbackGuidance } = require('./feedback');
 const store = require('../lib/store');
 
 const router = express.Router();
@@ -116,7 +117,7 @@ Return JSON:
 - Derive risks especially from the historical lessons and recurring deficiencies; mark "recurring":"yes" for those.
 Output ONLY the JSON.`;
 
-    const out = await generateJSON(prompt, { system: SYSTEM, maxOutputTokens: 20000, temperature: 0.3 });
+    const out = await generateJSON(prompt, { system: SYSTEM + getFeedbackGuidance('designreview'), maxOutputTokens: 20000, temperature: 0.3 });
     const checklist = (Array.isArray(out.checklist) ? out.checklist : []).map((c, i) => ({ slNo: i + 1, ...c }));
     const risks     = (Array.isArray(out.risks) ? out.risks : []).map((r, i) => ({ slNo: i + 1, ...r }));
 

@@ -279,36 +279,37 @@ const KB_DOC_META = {
   'Life-Safing Appliances including LSA Code. 2010 Edition (1).pdf': { id: 'STATIC-LSA',        name: 'Life-Saving Appliances & LSA Code 2010',        type: 'IMO',        docCategory: 'compliance' },
   'main_rules_july_2024-edition.pdf':                                { id: 'STATIC-MAIN-RULES', name: 'Main Classification Rules — July 2024 Edition',  type: 'Class Rule', docCategory: 'compliance' },
   'BUILD SPECIFICATION  - input file.pdf':                           { id: 'STATIC-BUILD-SPEC', name: 'Build Specification — Input File',               type: 'Build Spec', docCategory: 'compliance' },
+  // ── HSL document repository (HSLdocs/) ──────────────────────────────────────
+  'SOTR_HDCS (1) (1).pdf':                  { id: 'HSL-SOTR-HDCS',       name: 'SOTR — HDCS',                         type: 'SOTR',              docCategory: 'compliance' },
+  'EED-56-02 SOTR DGPS (1).pdf':            { id: 'HSL-SOTR-DGPS',       name: 'SOTR — DGPS (EED-56-02)',             type: 'SOTR',              docCategory: 'compliance' },
+  'EED-56-03, EM LOG (COTS) - NOV 2006 (1).pdf': { id: 'HSL-SPEC-EMLOG', name: 'Specification — EM Log (EED-56-03)',  type: 'SOTR',              docCategory: 'compliance' },
+  'MBSRE_POTS_DSVs.pdf':                    { id: 'HSL-POTS-MBSRE',      name: 'POTS — MB/SRE (DSVs)',                type: 'POTS',              docCategory: 'compliance' },
+  'Technical offer of HDCS.pdf':            { id: 'HSL-OFFER-HDCS',      name: 'Technical Offer — HDCS',              type: 'Technical Offer',   docCategory: 'vendor' },
+  'Technical_Compliance_HDCS.pdf':          { id: 'HSL-COMPLY-HDCS',     name: 'Technical Compliance Matrix — HDCS', type: 'Compliance Matrix', docCategory: 'vendor' },
+  'binding data.pdf':                       { id: 'HSL-BINDING-DATA',    name: 'Binding Data (vendor)',               type: 'Binding Data',      docCategory: 'vendor' },
+  'SLD_MB_SRE System-VC11190-91 Model.pdf': { id: 'HSL-SLD-MBSRE',       name: 'SLD — MB/SRE System (VC11190-91)',    type: 'Drawing',           docCategory: 'vendor' },
+  '01 BINDING DWG.pdf':                     { id: 'HSL-BINDING-DWG',     name: 'Binding Drawing (GA)',                type: 'Drawing',           docCategory: 'vendor' },
+  '68 EED-50-13-R1 (1).pdf':                { id: 'HSL-DWG-EED5013',     name: 'Drawing — EED-50-13-R1',              type: 'Drawing',           docCategory: 'vendor' },
 };
 
-async function initializeKnowledgeBase() {
-  const pdfParse = require('pdf-parse');
-  const docsDir  = path.join(__dirname, '..', 'docs');
-
-  if (!fs.existsSync(docsDir)) {
-    console.warn('[RAG] docs directory not found:', docsDir);
-    _kbReady = true;
-    return;
-  }
-
-  const files = fs.readdirSync(docsDir).filter(f => /\.pdf$/i.test(f));
+async function ingestDir(dir, pdfParse, defaultCategory) {
+  if (!fs.existsSync(dir)) return 0;
+  const files = fs.readdirSync(dir).filter(f => /\.pdf$/i.test(f));
   let total = 0;
-
   for (const file of files) {
     const meta = KB_DOC_META[file] || {
       id:          'STATIC-' + file.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').toUpperCase().replace(/\.PDF-?$/, ''),
       name:        file.replace(/\.pdf$/i, ''),
       type:        'Technical',
-      docCategory: 'vendor',
+      docCategory: defaultCategory,
     };
-
-    const fp = path.join(docsDir, file);
+    if (docStore.has(meta.id)) continue;            // already indexed (dedupe across dirs)
     try {
-      const buffer = fs.readFileSync(fp);
+      const buffer = fs.readFileSync(path.join(dir, file));
       const data   = await pdfParse(buffer);
       const text   = data.text || '';
       if (!text.trim()) {
-        console.warn(`[RAG] No text extracted from "${file}" — skipped`);
+        console.warn(`[RAG] No text layer in "${file}" — skipped for KB (still usable via vision in modules)`);
         continue;
       }
       const n = await addDocument({ ...meta, text, uploadedBy: 'system', uploadedByRole: 'system' });
@@ -318,6 +319,21 @@ async function initializeKnowledgeBase() {
       console.warn(`[RAG] Skipped "${file}": ${err.message}`);
     }
   }
+  return total;
+}
+
+async function initializeKnowledgeBase() {
+  const pdfParse = require('pdf-parse');
+  const docsDir  = path.join(__dirname, '..', 'docs');
+  const hslDir   = path.join(__dirname, '..', '..', 'HSLdocs');
+
+  let total = 0;
+  // Base reference standards/rules (server/docs) + the ENTIRE HSL document
+  // repository (HSLdocs) so the assistant can cross-reference everything HSL
+  // shared. Scanned/drawing PDFs with no text layer are skipped here but remain
+  // fully usable in the modules (which read them with the vision model).
+  total += await ingestDir(docsDir, pdfParse, 'compliance');
+  total += await ingestDir(hslDir,  pdfParse, 'vendor');
 
   _kbReady = true;
   flushCache();

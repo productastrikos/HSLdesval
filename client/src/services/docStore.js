@@ -12,9 +12,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const DB_NAME = 'hsl_docstore';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const BASE_STORE = 'base';
 const USER_STORE = 'user';
+const LIBRARY_STORE = 'library';   // pre-loaded HSL documents (persist across sessions)
 
 let _dbPromise = null;
 
@@ -24,8 +25,9 @@ function openDB() {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(BASE_STORE)) db.createObjectStore(BASE_STORE, { keyPath: 'id' });
-      if (!db.objectStoreNames.contains(USER_STORE)) db.createObjectStore(USER_STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(BASE_STORE))    db.createObjectStore(BASE_STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(USER_STORE))    db.createObjectStore(USER_STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(LIBRARY_STORE)) db.createObjectStore(LIBRARY_STORE, { keyPath: 'id' });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -129,4 +131,48 @@ export async function clearUserDocs() {
     await tx(USER_STORE, 'readwrite', os => os.clear());
     emitChange();
   } catch (_) {}
+}
+
+// ── Pre-loaded document library (persists across sessions) ───────────────────
+// Records: { id, name, type, mime, text, isDrawing, libraryFile, source:'library' }
+export async function hasLibraryDocs() {
+  try { return (await tx(LIBRARY_STORE, 'readonly', os => reqToPromise(os.count()))) > 0; }
+  catch (_) { return false; }
+}
+
+export async function cacheLibraryDocs(docs = []) {
+  if (!docs.length) return;
+  await tx(LIBRARY_STORE, 'readwrite', os => {
+    for (const d of docs) os.put({
+      id: d.id, name: d.name, type: d.type || 'General Document', mime: d.mime || 'application/pdf',
+      text: d.text || '', isDrawing: !!d.isDrawing, libraryFile: d.libraryFile || d.id,
+      textLength: d.textLength || (d.text ? d.text.length : 0), note: d.note || '', source: 'library',
+    });
+  });
+  emitChange();
+}
+
+export async function listLibraryDocs() {
+  try {
+    const all = await tx(LIBRARY_STORE, 'readonly', os => reqToPromise(os.getAll()));
+    return all.map(({ id, name, type, mime, isDrawing, libraryFile, textLength }) =>
+      ({ id, name, type, mime, isDrawing, libraryFile, textLength, source: 'library' }));
+  } catch (_) { return []; }
+}
+
+export async function getLibraryDoc(id) {
+  if (!id) return null;
+  try { return await tx(LIBRARY_STORE, 'readonly', os => reqToPromise(os.get(id))); }
+  catch (_) { return null; }
+}
+
+// ── Merged view used by every document picker (user uploads + pre-loaded library)
+export async function listSelectableDocs() {
+  const [user, lib] = await Promise.all([listUserDocs(), listLibraryDocs()]);
+  const userTagged = user.map(d => ({ ...d, source: 'user' }));
+  return [...userTagged, ...lib];
+}
+
+export async function getSelectableDoc(id) {
+  return (await getUserDoc(id)) || (await getLibraryDoc(id));
 }

@@ -34,6 +34,11 @@ const IMAGE_MIMES = new Set([
   'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff',
 ]);
 
+// Page markers are injected into extracted PDF text so downstream features (pre-bid
+// queries, BOM generation, clause referencing) can cite an actual page number.
+// The format is stable and human-readable; prompts tell the model to read it.
+const PAGE_MARK = (n) => `----- Page ${n} -----`;
+
 // A page with fewer than this many characters of embedded text is treated as
 // scanned / image-only and routed to the vision model.
 const MIN_PAGE_TEXT_CHARS = 80;
@@ -94,8 +99,9 @@ async function extractPdfText(buffer) {
     if (text.length >= MIN_PAGE_TEXT_CHARS) return text;
 
     const pngs = await rasterizePdfToPngs(buffer, { maxPages: MAX_VISION_PAGES }).catch(() => []);
-    const parts = await mapLimit(pngs, OCR_CONCURRENCY, pg => ocrImage(pg.data).catch(() => ''));
-    const ocrText = parts.filter(Boolean).join('\n\n').trim();
+    const parts = await mapLimit(pngs, OCR_CONCURRENCY,
+      pg => ocrImage(pg.data).then(t => ({ page: pg.page, t })).catch(() => ({ page: pg.page, t: '' })));
+    const ocrText = parts.filter(x => x.t).map(x => `${PAGE_MARK(x.page)}\n${x.t}`).join('\n\n').trim();
     if (ocrText) return ocrText;
     throw diagnoseEmpty(true);   // no text layer at all → treat as scanned
   }
@@ -112,11 +118,14 @@ async function extractPdfText(buffer) {
     for (const r of ocrResults) if (r.txt) ocrByPage.set(r.page, r.txt);
   }
 
-  // Reassemble in page order, preferring the text layer, then OCR.
+  // Reassemble in page order, preferring the text layer, then OCR. Each page is
+  // prefixed with a page marker so features can cite real page numbers.
   const out = [];
   for (const p of pageTexts) {
-    if (p.text.length >= MIN_PAGE_TEXT_CHARS) out.push(p.text);
-    else if (ocrByPage.has(p.page))           out.push(ocrByPage.get(p.page));
+    let body = '';
+    if (p.text.length >= MIN_PAGE_TEXT_CHARS) body = p.text;
+    else if (ocrByPage.has(p.page))           body = ocrByPage.get(p.page);
+    if (body) out.push(`${PAGE_MARK(p.page)}\n${body}`);
   }
   const result = out.join('\n\n').trim();
   if (result) return result;
@@ -145,4 +154,4 @@ async function extractFileText(buffer, mime, origName = '') {
   return buffer.toString('utf8');
 }
 
-module.exports = { extractFileText, IMAGE_MIMES };
+module.exports = { extractFileText, IMAGE_MIMES, PAGE_MARK };

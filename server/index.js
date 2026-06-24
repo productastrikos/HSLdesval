@@ -36,6 +36,8 @@ const { getModel, generateText, generateJSON } = require('./lib/llm');
 const { extractFileText }          = require('./lib/extract');
 const { isRendererAvailable }      = require('./lib/rasterize');
 const { buildWorkbook }            = require('./lib/excel');
+const { buildWordDoc, buildWordTable, buildWordFromText } = require('./lib/word');
+const { getFeedbackGuidance }      = require('./features/feedback');
 
 // ── Automatic document-type classification ────────────────────────────────────
 // The upload page never asks the user what kind of document they are uploading;
@@ -125,7 +127,7 @@ Always:
 - Flag safety-critical findings prominently
 
 Current domain focus: ${domain || 'All domains'}
-Mode: ${mode || 'general'}${docBlock}${contextBlock}`;
+Mode: ${mode || 'general'}${getFeedbackGuidance('chat')}${docBlock}${contextBlock}`;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -762,6 +764,33 @@ app.post('/api/export/xlsx', authenticate, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EXPORT WORD  POST /api/export/word
+// Body (any of): { title, subtitle, text }  → prose document (markdown-ish)
+//                { title, subtitle, columns, rows } → single-table document
+//                { title, subtitle, blocks } → structured blocks
+// Produces an editable Word (.doc) file. Used by the Converter, Document Worker,
+// BOM and SOTR generators.
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/export/word', authenticate, (req, res) => {
+  try {
+    const { title = 'Document', subtitle = '', text, columns, rows, blocks, filename } = req.body || {};
+    let buf;
+    if (typeof text === 'string')                 buf = buildWordFromText(title, text, subtitle);
+    else if (Array.isArray(columns))              buf = buildWordTable(title, columns, rows || [], subtitle);
+    else if (Array.isArray(blocks))               buf = buildWordDoc({ title, subtitle, blocks });
+    else return res.status(400).json({ error: 'Provide text, columns+rows, or blocks.' });
+
+    const safe = (filename || title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.docx?$/i, '');
+    res.setHeader('Content-Type', 'application/msword');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}.doc"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[/api/export/word]', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Feature modules (all authenticated)
 //   /api/drawings     Extraction of data from drawings (cable schedules, etc.)
 //   /api/inspection   Inspection-report → categorised observations
@@ -778,6 +807,11 @@ app.use('/api/compliance',   authenticate, require('./features/compliance'));
 app.use('/api/binding',      authenticate, require('./features/binding'));
 app.use('/api/prebid',       authenticate, require('./features/prebid'));
 app.use('/api/designreview', authenticate, require('./features/designreview'));
+app.use('/api/docworker',    authenticate, require('./features/docworker'));
+app.use('/api/bom',          authenticate, require('./features/bom'));
+app.use('/api/dashboard',    authenticate, require('./features/dashboard'));
+app.use('/api/library',      authenticate, require('./features/library').router);
+app.use('/api/feedback',     authenticate, require('./features/feedback').router);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Unknown API endpoint → JSON 404 (must precede the SPA catch-all so unmatched

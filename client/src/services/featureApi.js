@@ -83,13 +83,84 @@ export async function downloadXlsx(sheets, filename = 'export') {
   return { kb: Math.round(blob.size / 1024) };
 }
 
-// ── Drawings ─────────────────────────────────────────────────────────────────
-export async function extractDrawing(file, prompt, columns) {
+// ── Shared: build + download a Word (.doc) document ──────────────────────────
+// payload: { title, subtitle, filename } plus ONE of: { text } | { columns, rows } | { blocks }
+export async function downloadWord(payload) {
+  const res = await netFetch(`${API_BASE}/export/word`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: `Request failed (HTTP ${res.status}).` }));
+    throw new Error(body.error || `Request failed (HTTP ${res.status}).`);
+  }
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `${(payload.filename || payload.title || 'document').replace(/\.docx?$/i, '')}.doc`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return { kb: Math.round(blob.size / 1024) };
+}
+
+// ── Feedback (continuous learning) ───────────────────────────────────────────
+export async function sendFeedback({ module, rating, remarks, subject }) {
+  return postJSON('/feedback', { module, rating, remarks, subject });
+}
+
+// ── Drawing Intelligence ─────────────────────────────────────────────────────
+// source: { file } (upload) OR { libraryId } (pre-loaded drawing)
+export async function extractDrawing({ file, libraryId, prompt, columns }) {
   const form = new FormData();
-  form.append('file', file);
+  if (file) form.append('file', file);
+  if (libraryId) form.append('libraryId', libraryId);
   if (prompt) form.append('prompt', prompt);
   if (columns) form.append('columns', JSON.stringify(columns));
   return postForm('/drawings/extract', form);
+}
+
+export async function validateDrawing({ file, libraryId, prompt }) {
+  const form = new FormData();
+  if (file) form.append('file', file);
+  if (libraryId) form.append('libraryId', libraryId);
+  if (prompt) form.append('prompt', prompt);
+  return postForm('/drawings/validate', form);
+}
+
+// ── Intelligent Document Converter / Worker ──────────────────────────────────
+export async function docworkerExtract(body) { return postJSON('/docworker/extract', body); }
+export async function docworkerEdit({ file, docId, text, name, instruction }) {
+  const form = new FormData();
+  if (file) form.append('file', file);
+  if (docId) form.append('docId', docId);
+  if (text) form.append('text', text);
+  if (name) form.append('name', name);
+  form.append('instruction', instruction || '');
+  return postForm('/docworker/edit', form);
+}
+
+// ── BOM + SOTR generation ────────────────────────────────────────────────────
+export async function bomGenerate(body) { return postJSON('/bom/generate', body); }
+export async function bomSotr(body)     { return postJSON('/bom/sotr', body); }
+
+// ── Prompt-driven dashboard analytics ────────────────────────────────────────
+export async function dashboardAnalytics(body) { return postJSON('/dashboard/analytics', body); }
+
+// ── Inspection analytics + status tracking ───────────────────────────────────
+export async function inspectionAnalytics(project = '') {
+  return getJSON(`/inspection/analytics${project ? `?project=${encodeURIComponent(project)}` : ''}`);
+}
+export async function listInspectionObservations(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return getJSON(`/inspection/observations${qs ? `?${qs}` : ''}`);
+}
+export async function updateInspectionObservation(id, body) {
+  const res = await netFetch(`${API_BASE}/inspection/observations/${id}`, {
+    method: 'PATCH', headers: authHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify(body),
+  });
+  return handle(res);
 }
 
 // ── Inspection reports ───────────────────────────────────────────────────────

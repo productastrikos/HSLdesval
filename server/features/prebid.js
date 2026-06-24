@@ -13,6 +13,7 @@
 const express = require('express');
 const { generateJSON } = require('../lib/llm');
 const { resolveDocText, mapLimit, ragContextBlock } = require('./_util');
+const { getFeedbackGuidance } = require('./feedback');
 const store = require('../lib/store');
 
 const router = express.Router();
@@ -48,19 +49,22 @@ APPLICABLE RULES / STANDARDS:
 ${ruleBlock || '(none)'}
 
 Return JSON: { "queries": [ {
-  "clauseRef": "",  // clause / section / drawing reference in the RFP
-  "category":  ${JSON.stringify(CATEGORIES)},
-  "query":     "",  // the question to raise with the client, specific and answerable
-  "rationale": "",  // why it matters (the ambiguity/contradiction/risk it addresses)
-  "risk":      "high" | "medium" | "low"
+  "clauseRef":         "",  // clause / section / drawing reference in the RFP
+  "pageNumber":        "",  // page number from the nearest "----- Page N -----" marker preceding the clause
+  "clauseDescription": "",  // a concise description/quote of what the referenced clause says
+  "category":          ${JSON.stringify(CATEGORIES)},
+  "query":             "",  // the question to raise with the client, specific and answerable
+  "rationale":         "",  // why it matters (the ambiguity/contradiction/risk it addresses)
+  "risk":              "high" | "medium" | "low"
 } ] }
 
 Rules:
-- Only raise queries grounded in THIS section's text. Reference the clause.
+- Only raise queries grounded in THIS section's text. Reference the clause AND its page number (read the "----- Page N -----" markers).
+- "clauseDescription" must summarise the actual clause text the query is about.
 - Prefer concrete, technical queries over generic ones. Flag contradictions against other clauses you can see.
 - If the section is purely boilerplate with nothing to query, return { "queries": [] }.
 Output ONLY the JSON.`;
-  const out = await generateJSON(prompt, { system: SYSTEM, maxOutputTokens: 12000, temperature: 0.35 });
+  const out = await generateJSON(prompt, { system: SYSTEM + getFeedbackGuidance('prebid'), maxOutputTokens: 12000, temperature: 0.35 });
   return Array.isArray(out.queries) ? out.queries : [];
 }
 

@@ -1,0 +1,147 @@
+'use strict';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BOM Generation & SOTR Generation
+//   - POST /api/bom/generate  { sources:[{name,text}], prompt, columns[] }
+//        Generate a Bill of Materials from the RFP + Build Specification (+ GA),
+//        with Equipment Name, OEM, Capacity, Page Number, Reference and AI
+//        estimation/calculation (e.g. number of speakers from compartment area).
+//   - POST /api/bom/sotr      { bom:[...], columns, prompt, title }
+//        Generate a Statement of Technical Requirements (SOTR) derived from the
+//        BOM, guided by the user's prompt → returns a document (→ Word/TXT).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const express = require('express');
+const { generateJSON, generateText } = require('../lib/llm');
+const { mapLimit, ragContextBlock } = require('./_util');
+const { getFeedbackGuidance } = require('./feedback');
+
+const router = express.Router();
+
+const DEFAULT_COLUMNS = ['Equipment Name', 'OEM', 'Capacity', 'Quantity', 'Page Number', 'Reference'];
+
+const BOM_SYS = `You are a senior shipbuilding estimation engineer preparing a Bill of Materials (BOM) from tender and build-specification documents.
+You identify every distinct equipment / system / material item the vessel requires, with its maker/OEM (if named), capacity/rating, and the page + clause it is referenced from.
+You can ESTIMATE quantities by calculation when asked (e.g. number of PA speakers from a compartment's area/volume, number of light fittings from deck area, cable lengths from runs) — when you estimate, state the basis briefly in the Reference/remarks.
+Page markers look like "----- Page 7 -----"; use the nearest preceding marker as the Page Number. Never invent OEM names or values that are not supported — use "" instead.`;
+
+function normaliseColumns(raw) {
+  if (Array.isArray(raw)) return raw.map(c => String(c).trim()).filter(Boolean);
+  if (typeof raw === 'string' && raw.trim()) return raw.split(/[,\n;]+/).map(s => s.trim()).filter(Boolean);
+  return [];
+}
+
+function windows(text, size = 13000) {
+  const paras = String(text || '').split(/\n{2,}/);
+  const out = []; let buf = '';
+  for (const p of paras) {
+    if ((buf + '\n\n' + p).length > size && buf) { out.push(buf); buf = p; }
+    else buf = buf ? `${buf}\n\n${p}` : p;
+  }
+  if (buf.trim()) out.push(buf);
+  return out.length ? out : [text];
+}
+
+// Build [{name, chunk}] preserving each source's name on every chunk.
+function chunkSources(sources) {
+  const out = [];
+  for (const s of sources) {
+    if (!s || !s.text || !s.text.trim()) continue;
+    for (const c of windows(s.text)) out.push({ name: s.name || 'source', chunk: c });
+  }
+  return out;
+}
+
+async function bomForChunk({ name, chunk }, prompt, columns) {
+  const full = `Extract Bill-of-Materials items from this section of "${name}".
+${prompt ? `User instructions: ${prompt}` : ''}
+
+Use EXACTLY these columns as JSON keys (use "" when not stated):
+${columns.map(c => `  - "${c}"`).join('\n')}
+
+SECTION CONTENT:
+${chunk}
+
+Return ONLY JSON: { "rows": [ { ${columns.map(c => `"${c}": ""`).join(', ')} } ] }
+- One row per distinct equipment/material item. Set "Reference" to the clause/section/spec id (and the source name "${name}"). Set "Page Number" from the nearest "----- Page N -----" marker.
+- If the user asked you to estimate a quantity, compute it and note the basis in "Reference".`;
+  const out = await generateJSON(full, { system: BOM_SYS + getFeedbackGuidance('bom'), temperature: 0.15, maxOutputTokens: 16000 });
+  return Array.isArray(out.rows) ? out.rows : [];
+}
+
+// POST /api/bom/generate
+router.post('/generate', async (req, res) => {
+  try {
+    const prompt  = req.body.prompt || '';
+    const columns = normaliseColumns(req.body.columns).length ? normaliseColumns(req.body.columns) : DEFAULT_COLUMNS.slice();
+    const sources = Array.isArray(req.body.sources) ? req.body.sources.filter(s => s && s.text) : [];
+    if (!sources.length) return res.status(400).json({ error: 'Provide at least one source document (RFP / Build Specification).' });
+
+    const chunks = chunkSources(sources);
+    const errors = [];
+    const parts = await mapLimit(chunks, 2, async (c) => {
+      try { return await bomForChunk(c, prompt, columns); }
+      catch (e) { errors.push(e.message); return []; }
+    });
+    let rows = parts.flat().filter(r => r && typeof r === 'object');
+    if (!rows.length && errors.length) return res.status(502).json({ error: `AI BOM generation failed: ${errors[0]}` });
+
+    // Normalise to columns + dedupe by equipment name (keep the richer row)
+    const nameCol = columns.find(c => /equipment|item|material|name/i.test(c)) || columns[0];
+    const seen = new Map();
+    for (const r of rows) {
+      const o = {}; columns.forEach(c => { o[c] = (r[c] ?? '').toString().trim(); });
+      if (!columns.some(c => o[c])) continue;
+      const key = (o[nameCol] || JSON.stringify(o)).toLowerCase();
+      const prev = seen.get(key);
+      const filled = obj => columns.reduce((n, c) => n + (obj[c] ? 1 : 0), 0);
+      if (!prev || filled(o) > filled(prev)) seen.set(key, o);
+    }
+    rows = [...seen.values()].map((r, i) => ({ 'S.No': String(i + 1), ...r }));
+    const outColumns = ['S.No', ...columns];
+
+    res.json({ columns: outColumns, rows, rowCount: rows.length, sources: sources.map(s => s.name) });
+  } catch (err) {
+    console.error('[/api/bom/generate]', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
+const SOTR_SYS = `You are a shipyard design engineer drafting a formal Statement of Technical Requirements (SOTR) from an approved Bill of Materials.
+An SOTR specifies, per equipment/system: scope & purpose, technical particulars & capacity, applicable standards/class rules, interface & environmental requirements, documentation/test/certification requirements, and warranty/spares.
+Write in clear numbered clauses, grounded in the BOM and any rule context provided. Use Markdown headings (##, ###), bullets and pipe tables.`;
+
+// POST /api/bom/sotr
+router.post('/sotr', async (req, res) => {
+  try {
+    const bom = Array.isArray(req.body.bom) ? req.body.bom : [];
+    if (!bom.length) return res.status(400).json({ error: 'Generate a BOM first — the SOTR is derived from it.' });
+    const prompt  = req.body.prompt || '';
+    const title   = req.body.title || 'Statement of Technical Requirements';
+    const columns = Array.isArray(req.body.columns) && req.body.columns.length ? req.body.columns : Object.keys(bom[0]);
+
+    const bomText = bom.slice(0, 120).map((r, i) =>
+      `${i + 1}. ` + columns.map(c => `${c}: ${r[c] ?? ''}`).filter(s => !/: $/.test(s)).join(' | ')
+    ).join('\n');
+
+    const { block: ruleBlock, citations } = await ragContextBlock(`${prompt} technical requirements standards class rules`, 6);
+
+    const full = `Draft a Statement of Technical Requirements (SOTR) derived from this Bill of Materials.
+${prompt ? `User guidance: ${prompt}` : ''}
+
+BILL OF MATERIALS:
+${bomText}
+
+APPLICABLE RULE / STANDARD CONTEXT:
+${ruleBlock || '(none retrieved)'}
+
+Produce a complete, professional SOTR document in Markdown. Start with "# ${title}", then an introduction/scope, then a numbered technical requirement section per major equipment/system from the BOM, then common requirements (standards, documentation, testing, inspection, warranty, spares).`;
+    const content = await generateText(full, { system: SOTR_SYS + getFeedbackGuidance('sotr'), temperature: 0.3, maxOutputTokens: 8000 });
+    res.json({ title, content, citations });
+  } catch (err) {
+    console.error('[/api/bom/sotr]', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
+module.exports = router;

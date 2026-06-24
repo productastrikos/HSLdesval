@@ -13,6 +13,7 @@
 const express = require('express');
 const { generateJSON } = require('../lib/llm');
 const { resolveDocText, mapLimit, ragContextBlock } = require('./_util');
+const { getFeedbackGuidance } = require('./feedback');
 
 const router = express.Router();
 
@@ -58,7 +59,7 @@ Rules:
 - "Submitted" only if present AND adequate; "Partial" if present but incomplete; "Insufficient" if present but not to spec; "Missing" if absent.
 - Do not invent submissions. If the binding data is silent on an item, mark "Missing".
 Output ONLY the JSON.`;
-  const out = await generateJSON(prompt, { system: SYSTEM, maxOutputTokens: 16384, temperature: 0.15 });
+  const out = await generateJSON(prompt, { system: SYSTEM + getFeedbackGuidance('binding'), maxOutputTokens: 16384, temperature: 0.15 });
   return Array.isArray(out.gaps) ? out.gaps : [];
 }
 
