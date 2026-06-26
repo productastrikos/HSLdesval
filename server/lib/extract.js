@@ -9,6 +9,7 @@
 
 const { getModel } = require('./llm');
 const { extractPdfPageTexts, rasterizePdfToPngs, isRendererAvailable } = require('./rasterize');
+const { parseCad, isCadName } = require('./cad');
 
 // Build a specific, actionable error when a PDF yields no text — so a deployed
 // app reports the real cause instead of a blanket "could not read this file".
@@ -137,6 +138,19 @@ async function extractFileText(buffer, mime, origName = '') {
   const isPDF  = mime === 'application/pdf' || /\.pdf$/i.test(origName);
   const isDOCX = mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || /\.docx$/i.test(origName);
   const isImg  = IMAGE_MIMES.has(mime) || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(origName);
+  const isCad  = isCadName(origName, mime);
+
+  // AutoCAD drawings (.dwg / .dxf) — decode to a structured text summary (text
+  // labels + computed compartment areas) so EVERY feature that reads documents
+  // (upload, convert, chat, BOM, design review, inspection, …) can consume a CAD
+  // drawing exactly like a PDF. Drawing Intelligence still uses the richer
+  // geometry-aware path; here we just need readable text.
+  if (isCad) {
+    const parsed = await parseCad(buffer, origName || 'drawing');
+    const summary = (parsed && parsed.summary || '').trim();
+    if (summary) return summary;
+    throw readError('Could not read this CAD drawing. If it is a binary .dwg that failed to decode, export it to DXF or PDF from AutoCAD and re-upload.');
+  }
 
   if (isPDF) return extractPdfText(buffer);
 

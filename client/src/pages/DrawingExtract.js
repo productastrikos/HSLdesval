@@ -27,8 +27,8 @@ const PRESETS = {
   'Custom': { prompt: '', columns: [] },
 };
 
-const V_COLS = ['slNo', 'area', 'irsReference', 'requirement', 'observation', 'status', 'severity', 'recommendation'];
-const V_HEAD = ['Sl.No', 'Area', 'IRS Reference', 'Requirement', 'Observation', 'Status', 'Severity', 'Recommendation'];
+const V_COLS = ['slNo', 'area', 'source', 'irsReference', 'requirement', 'observation', 'status', 'severity', 'recommendation'];
+const V_HEAD = ['Sl.No', 'Area', 'Source', 'Reference', 'Requirement', 'Observation', 'Status', 'Severity', 'Recommendation'];
 
 export default function DrawingExtract() {
   const [mode, setMode]       = useState('extract');   // extract | validate
@@ -38,6 +38,8 @@ export default function DrawingExtract() {
   const [source, setSource]   = useState(null);        // selected doc {id,name,libraryFile,source}
   const [file, setFile]       = useState(null);        // uploaded File
   const [vFocus, setVFocus]   = useState('');
+  const [buildSpecDoc, setBuildSpecDoc] = useState(null);
+  const [bindingDoc, setBindingDoc]     = useState(null);
   const [busy, setBusy]       = useState(false);
   const [error, setError]     = useState(null);
   const [result, setResult]   = useState(null);
@@ -78,7 +80,7 @@ export default function DrawingExtract() {
     setBusy(true); setError(null); setVResult(null);
     try {
       const src = await resolveSource();
-      const res = await validateDrawing({ ...src, prompt: vFocus });
+      const res = await validateDrawing({ ...src, prompt: vFocus, buildSpecText: buildSpecDoc?.text, bindingText: bindingDoc?.text });
       setVResult(res);
       if (!res.findings?.length) setError('No findings were produced. Try a clearer drawing or add a focus area.');
     } catch (e) { setError(e.message); }
@@ -130,10 +132,15 @@ export default function DrawingExtract() {
           {busy && <div className="text-[10px] text-slate-500 flex items-center gap-1.5"><Spinner /> Large multi-page drawings can take 30–90s as each sheet is interpreted.</div>}
         </Card>
       ) : (
-        <Card title="2 · Validate against IRS Rules" desc="The drawing is read and checked against IRS (Indian Register of Shipping) class rules from the knowledge base.">
+        <Card title="2 · Validate Drawing" desc="The drawing is read and validated against IRS class rules (knowledge base), and optionally against a Build Specification, the Binding data of the corresponding equipment/system, and historical Lessons Learnt.">
           <Field label="Focus (optional)" value={vFocus} onChange={setVFocus} placeholder="e.g. cable segregation, earthing, short-circuit protection" />
-          <RunButton onClick={runValidate} busy={busy} busyLabel="Validating against IRS rules…">Validate Drawing</RunButton>
+          <div className="grid md:grid-cols-2 gap-4">
+            <DocSource label="Build Specification (optional)" value={buildSpecDoc} onChange={setBuildSpecDoc} />
+            <DocSource label="Binding data of equipment/system (optional)" value={bindingDoc} onChange={setBindingDoc} />
+          </div>
+          <RunButton onClick={runValidate} busy={busy} busyLabel="Validating against rules, spec, binding data & lessons…">Validate Drawing</RunButton>
           <ErrorNote>{error}</ErrorNote>
+          <p className="text-[10px] text-slate-500">Validates against IRS rules + any selected Build Specification and Binding data, plus relevant Lessons Learnt.</p>
         </Card>
       )}
 

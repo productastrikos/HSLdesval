@@ -189,7 +189,7 @@ router.post('/extract', upload.single('file'), async (req, res) => {
     const perPage = [];
 
     if (isCad) {
-      cad = parseCad(buffer, name);
+      cad = await parseCad(buffer, name);
       const out = await extractRowsFromText(cad.summary, { columns: proposedColumns, instruction });
       if (!proposedColumns.length && Array.isArray(out.columns)) proposedColumns = normaliseColumns(out.columns);
       allRows = Array.isArray(out.rows) ? out.rows : [];
@@ -252,7 +252,7 @@ router.post('/extract', upload.single('file'), async (req, res) => {
 // ── Vision description for rule validation ────────────────────────────────────
 async function describeDrawing(buffer, mime, name) {
   const isPDF = mime === 'application/pdf' || /\.pdf$/i.test(name);
-  if (isCadName(name, mime)) return parseCad(buffer, name).summary;
+  if (isCadName(name, mime)) return (await parseCad(buffer, name)).summary;
   const part = isPDF ? inlinePdf(buffer.toString('base64')) : inlineImg(buffer.toString('base64'), mime);
   const prompt = `Describe this engineering drawing in detail for a class-rule compliance review. List: drawing title/number/system; all equipment and their ratings; cable types, sizes and segregation; protective devices and discrimination; earthing/bonding; power sources and emergency supplies; redundancy; and anything safety-relevant. Be thorough and factual.`;
   try {
@@ -274,24 +274,32 @@ router.post('/validate', upload.single('file'), async (req, res) => {
     const { block: ruleBlock, citations } = await ragContextBlock(
       `IRS Indian Register of Shipping rules ${focus} ${description.slice(0, 400)}`, 10);
 
-    const prompt = `Validate the following ship engineering drawing against IRS (Indian Register of Shipping) classification rules${focus ? ` with focus on: ${focus}` : ''}.
+    // Additional validation sources (HSL MVP item 10): Build Specification, Binding
+    // data of the corresponding equipment/system, and relevant Lessons Learnt.
+    const buildSpecText = String(req.body.buildSpecText || '').slice(0, 9000);
+    const bindingText   = String(req.body.bindingText || '').slice(0, 9000);
+    const lessonsBlock  = require('./lessons').getLessonsGuidance(`${focus} ${description.slice(0, 300)}`, 8);
+
+    const prompt = `Validate the following ship engineering drawing against the applicable sources${focus ? ` with focus on: ${focus}` : ''}: IRS (Indian Register of Shipping) classification rules, the Build Specification, the Binding data of the corresponding equipment/system, and historical Lessons Learnt.
 
 DRAWING CONTENT (read from the drawing):
 ${description.slice(0, 12000)}
 
 APPLICABLE IRS / CLASS RULES (from the knowledge base):
 ${ruleBlock || '(none retrieved — use established IRS rule knowledge)'}
+${buildSpecText ? `\nBUILD SPECIFICATION (validate the drawing against these requirements):\n${buildSpecText}\n` : ''}${bindingText ? `\nBINDING DATA / EQUIPMENT DATA (cross-check dimensions, ratings, interfaces against the drawing):\n${bindingText}\n` : ''}${lessonsBlock || ''}
 
 Return ONLY JSON: { "findings": [ {
   "area":        "",  // review area (e.g. "Cable segregation", "Earthing", "Short-circuit protection")
-  "irsReference":"",  // IRS clause / Part-Chapter-Section, or applicable rule id
-  "requirement": "",  // what the rule requires
+  "source":      "",  // which source this finding is against: "IRS Rule" | "Build Specification" | "Binding Data" | "Lessons Learnt"
+  "irsReference":"",  // IRS clause / Part-Chapter-Section, build-spec clause, or applicable rule id
+  "requirement": "",  // what the rule/spec/binding-data requires
   "observation": "",  // what the drawing shows vs the requirement
   "status":      "Compliant" | "Non-Compliant" | "Requires Review",
   "severity":    "critical" | "high" | "medium" | "low",
   "recommendation":""
 } ] }
-Produce 8-20 findings across multiple areas. Reference specific IRS clauses where possible.`;
+Produce 8-20 findings across multiple areas and across ALL the provided sources. Reference specific clauses where possible.`;
     const out = await generateJSON(prompt, { system: SYSTEM + getFeedbackGuidance('drawings'), temperature: 0.2, maxOutputTokens: 16000 });
     const findings = (Array.isArray(out.findings) ? out.findings : []).map((f, i) => ({ slNo: i + 1, ...f }));
     const statuses = ['Compliant', 'Non-Compliant', 'Requires Review'];

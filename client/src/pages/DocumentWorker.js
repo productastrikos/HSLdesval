@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Page, Card, RunButton, ErrorNote, DocSource, Field, Spinner, FeedbackBar, ModuleChat } from '../components/feature/FeatureKit';
-import { docworkerEdit, downloadWord } from '../services/featureApi';
+import { docworkerEdit, downloadWord, downloadPdf, logInteraction } from '../services/featureApi';
 
 const PRESETS = [
   'Rewrite this document in clear, formal shipyard technical-specification language.',
@@ -35,6 +35,7 @@ export default function DocumentWorker() {
         ? await docworkerEdit({ file, instruction })
         : await docworkerEdit({ text: source.text, name: source.name, instruction });
       setResult(res);
+      logInteraction({ module: 'Document Worker', prompt: instruction, subject: file?.name || source?.name || '', response: res.content || '' }).catch(() => {});
     } catch (e) { setError(e.message); }
     setBusy(false);
   };
@@ -44,6 +45,12 @@ export default function DocumentWorker() {
   const onWord = async () => {
     setDlBusy(true);
     try { await downloadWord({ title: `${docName.replace(/\.[^.]+$/, '')} (revised)`, text: result.content, filename: `${docName.replace(/\.[^.]+$/, '')}_revised` }); }
+    catch (e) { setError(e.message); }
+    setDlBusy(false);
+  };
+  const onPdf = async () => {
+    setDlBusy(true);
+    try { await downloadPdf({ title: `${docName.replace(/\.[^.]+$/, '')} (revised)`, text: result.content, filename: `${docName.replace(/\.[^.]+$/, '')}_revised` }); }
     catch (e) { setError(e.message); }
     setDlBusy(false);
   };
@@ -58,14 +65,14 @@ export default function DocumentWorker() {
   return (
     <Page
       title="Intelligent Document Worker"
-      subtitle="Upload or select a document and instruct the assistant to change it — rewrite, restructure, summarise, reformat, translate or convert to a checklist — then download the edited document as Word or text."
+      subtitle="Upload or select a document and instruct the assistant to change it — rewrite, restructure, summarise, reformat, translate or convert to a checklist — then download the edited document as Word, PDF or text."
     >
       <Card title="1 · Document & Instructions" desc="Choose a document, then describe the changes to make.">
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-3">
             <DocSource label="Document" value={source} onChange={(v) => { setSource(v); setFile(null); setResult(null); }} />
             <div>
-              <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.csv,.png,.jpg,.jpeg" className="hidden" onChange={onUpload} />
+              <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.csv,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.dwg,.dxf" className="hidden" onChange={onUpload} />
               <button onClick={() => fileRef.current?.click()}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
@@ -94,6 +101,9 @@ export default function DocumentWorker() {
           <div className="flex items-center gap-2">
             <button onClick={onWord} disabled={dlBusy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 text-sky-300 border border-sky-500/30 text-[11px] font-semibold hover:bg-sky-500/25 disabled:opacity-40">
               {dlBusy ? <Spinner /> : null} Download Word
+            </button>
+            <button onClick={onPdf} disabled={dlBusy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 text-red-300 border border-red-500/30 text-[11px] font-semibold hover:bg-red-500/25 disabled:opacity-40">
+              {dlBusy ? <Spinner /> : null} Download PDF
             </button>
             <button onClick={onTxt} className="px-3 py-1.5 rounded-lg bg-slate-700/40 text-slate-300 border border-slate-600 text-[11px] font-semibold hover:bg-slate-700/70">Download TXT</button>
           </div>

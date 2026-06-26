@@ -105,9 +105,49 @@ export async function downloadWord(payload) {
   return { kb: Math.round(blob.size / 1024) };
 }
 
+// ── Shared: build + download a PDF document ──────────────────────────────────
+// payload: { title, subtitle, filename } plus ONE of: { text } | { columns, rows } | { blocks }
+export async function downloadPdf(payload) {
+  const res = await netFetch(`${API_BASE}/export/pdf`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: `Request failed (HTTP ${res.status}).` }));
+    throw new Error(body.error || `Request failed (HTTP ${res.status}).`);
+  }
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `${(payload.filename || payload.title || 'document').replace(/\.pdf$/i, '')}.pdf`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return { kb: Math.round(blob.size / 1024) };
+}
+
 // ── Feedback (continuous learning) ───────────────────────────────────────────
 export async function sendFeedback({ module, rating, remarks, subject }) {
   return postJSON('/feedback', { module, rating, remarks, subject });
+}
+
+// ── Audit Log (admin) ────────────────────────────────────────────────────────
+export async function getAuditLogs(params = {}) {
+  const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString();
+  return getJSON(`/audit${qs ? `?${qs}` : ''}`);
+}
+export async function getAuditStats() { return getJSON('/audit/stats'); }
+
+// ── User Interaction History ─────────────────────────────────────────────────
+export async function logInteraction(entry)      { return postJSON('/interactions', entry); }
+export async function getInteractions(params = {}) {
+  const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))).toString();
+  return getJSON(`/interactions${qs ? `?${qs}` : ''}`);
+}
+export async function deleteInteraction(id) {
+  const res = await netFetch(`${API_BASE}/interactions/${id}`, { method: 'DELETE', headers: authHeaders() });
+  return handle(res);
 }
 
 // ── Drawing Intelligence ─────────────────────────────────────────────────────
@@ -121,11 +161,13 @@ export async function extractDrawing({ file, libraryId, prompt, columns }) {
   return postForm('/drawings/extract', form);
 }
 
-export async function validateDrawing({ file, libraryId, prompt }) {
+export async function validateDrawing({ file, libraryId, prompt, buildSpecText, bindingText }) {
   const form = new FormData();
   if (file) form.append('file', file);
   if (libraryId) form.append('libraryId', libraryId);
   if (prompt) form.append('prompt', prompt);
+  if (buildSpecText) form.append('buildSpecText', buildSpecText);
+  if (bindingText) form.append('bindingText', bindingText);
   return postForm('/drawings/validate', form);
 }
 
@@ -145,13 +187,23 @@ export async function docworkerEdit({ file, docId, text, name, instruction }) {
 export async function bomGenerate(body) { return postJSON('/bom/generate', body); }
 export async function bomSotr(body)     { return postJSON('/bom/sotr', body); }
 
+// ── Ship Cost Estimation ─────────────────────────────────────────────────────
+export async function costVendors()        { return getJSON('/cost/vendors'); }
+export async function costEstimate(body)    { return postJSON('/cost/estimate', body); }
+export async function costEnquiries(body)   { return postJSON('/cost/enquiries', body); }
+export async function costUpdate(body)      { return postJSON('/cost/update', body); }
+
 // ── Prompt-driven dashboard analytics ────────────────────────────────────────
 export async function dashboardAnalytics(body) { return postJSON('/dashboard/analytics', body); }
 
 // ── Inspection analytics + status tracking ───────────────────────────────────
-export async function inspectionAnalytics(project = '') {
-  return getJSON(`/inspection/analytics${project ? `?project=${encodeURIComponent(project)}` : ''}`);
+export async function inspectionAnalytics(params = {}) {
+  // Back-compat: a bare string is treated as the project filter.
+  const p = typeof params === 'string' ? { project: params } : params;
+  const qs = new URLSearchParams(Object.fromEntries(Object.entries(p).filter(([, v]) => v != null && v !== ''))).toString();
+  return getJSON(`/inspection/analytics${qs ? `?${qs}` : ''}`);
 }
+export async function inspectionQuery(body) { return postJSON('/inspection/query', body); }
 export async function listInspectionObservations(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return getJSON(`/inspection/observations${qs ? `?${qs}` : ''}`);

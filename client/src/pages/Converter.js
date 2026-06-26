@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, DocSource, Field, Spinner, FeedbackBar, ModuleChat } from '../components/feature/FeatureKit';
-import { docworkerExtract, extractText } from '../services/featureApi';
+import { docworkerExtract, extractText, logInteraction } from '../services/featureApi';
 
 const PRESETS = {
   'Ship Specifications': {
@@ -54,6 +54,8 @@ export default function Converter() {
       const columns = colText.split(/[,\n;]+/).map(s => s.trim()).filter(Boolean);
       const res = await docworkerExtract({ text: source.text, name: source.name, prompt, columns });
       setResult(res);
+      logInteraction({ module: 'Document Converter', prompt, subject: source.name,
+        response: `Extracted ${res.rows?.length || 0} rows into columns: ${(res.columns || columns).join(' | ')}.` }).catch(() => {});
       if (!res.rows?.length) setError('No rows were extracted. Refine the prompt or the columns.');
     } catch (e) { setError(e.message); }
     setBusy(false);
@@ -64,12 +66,12 @@ export default function Converter() {
       title="Intelligent Document Converter"
       subtitle="Select or upload any document, tell the assistant what to extract, and define your own columns — then download the result as Excel or Word. Fully prompt-driven: ask for different fields, formats and table columns on demand."
     >
-      <Card title="1 · Source & Extraction Request" desc="Pick a pre-loaded / uploaded document, or upload one here. Choose a preset or write a custom prompt + columns.">
+      <Card title="1 · Source & Extraction Request" desc="Select an uploaded document, or upload one here. Choose a preset or write a custom prompt + columns.">
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-3">
             <DocSource label="Document" value={source} onChange={(v) => { setSource(v); setResult(null); }} />
             <div>
-              <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.csv,.png,.jpg,.jpeg" className="hidden" onChange={onUpload} />
+              <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.csv,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.dwg,.dxf" className="hidden" onChange={onUpload} />
               <button onClick={() => fileRef.current?.click()} disabled={uploading}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors disabled:opacity-40">
                 {uploading ? <Spinner /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>}

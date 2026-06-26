@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { chat } from '../services/aiService';
+import { chat, compareByText } from '../services/aiService';
 import { listSelectableDocs, getSelectableDoc } from '../services/docStore';
 import { RULE_CORPUS, DOMAINS } from '../services/hslKnowledge';
 
@@ -21,7 +21,7 @@ function makeWelcomeMsg() {
     id:        'welcome-' + Date.now(),
     role:      'assistant',
     isWelcome: true,
-    content:   "Welcome to the HSL Design Assistant.\n\nI'm trained on the entire HSL document repository plus classification rules (IRS/DNV/ABS/IACS), IMO and IEC regulations and Naval standards, so I can cross-reference across all of them. Ask me to validate Build Specifications, compare documents, extract or estimate data, generate technical specs, or perform engineering calculations.\n\nSelect any pre-loaded or uploaded document as reference context, try a suggested prompt, or ask anything about your vessel design.",
+    content:   "Welcome to the HSL Design Assistant.\n\nI'm grounded on the built-in reference knowledge base — SOLAS, the LSA Code, the Classification Rules and the Build Specification — and on any documents you upload. Ask me to validate Build Specifications, compare documents, extract or estimate data, generate technical specs, or perform engineering calculations.\n\nUpload a document on the Documents page and select it here as reference context, try a suggested prompt, or ask anything about your vessel design.",
     timestamp: new Date().toLocaleTimeString('en-IN', { hour12: false }),
     mode:      'ai',
   };
@@ -109,6 +109,86 @@ function Message({ msg }) {
   );
 }
 
+// ── Document comparison panel ─────────────────────────────────────────────────
+// Select two reference documents — the assistant performs a section-by-section diff.
+function ComparePanel({ docs }) {
+  const [docAId,  setDocAId]  = useState('');
+  const [docBId,  setDocBId]  = useState('');
+  const [diff,    setDiff]    = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState(null);
+
+  const run = async () => {
+    if (!docAId || !docBId) return;
+    setLoading(true); setDiff(null); setError(null);
+    try {
+      const [a, b] = await Promise.all([getSelectableDoc(docAId), getSelectableDoc(docBId)]);
+      const result = await compareByText(a?.text || '', b?.text || '', a?.name, b?.name);
+      if (result.diff && result.diff.length > 0) setDiff(result.diff);
+      else setError('No structured differences were found between these documents.');
+    } catch (e) { setError(e.message); }
+    setLoading(false);
+  };
+
+  const sevColor = (s) =>
+    s === 'critical' ? 'text-red-400' :
+    s === 'high'     ? 'text-orange-400' :
+    s === 'medium'   ? 'text-amber-400' :
+                       'text-sky-400';
+
+  return (
+    <div className="bg-app-panel border border-app-border rounded-xl p-3">
+      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Document Comparison</div>
+      {docs.length < 2 ? (
+        <p className="text-[10px] text-slate-600 leading-relaxed">Select at least two documents (upload on the <span className="text-sky-400">Documents</span> page) to run a section-by-section diff.</p>
+      ) : (
+        <div className="space-y-2 mb-2">
+          <div>
+            <label className="text-[9px] uppercase tracking-widest text-slate-500 font-bold block mb-1">Document A</label>
+            <select value={docAId} onChange={e => setDocAId(e.target.value)} className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200">
+              <option value="">— select —</option>
+              {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[9px] uppercase tracking-widest text-slate-500 font-bold block mb-1">Document B</label>
+            <select value={docBId} onChange={e => setDocBId(e.target.value)} className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200">
+              <option value="">— select —</option>
+              {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+      <button
+        onClick={run}
+        disabled={loading || !docAId || !docBId}
+        className="w-full py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-violet-500 text-white text-[11px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
+      >
+        {loading ? 'Comparing…' : 'Compare Documents'}
+      </button>
+      {error && <div className="mt-2 text-[10px] text-red-400">⚠ {error}</div>}
+      {diff && (
+        <div className="mt-2 space-y-1.5 max-h-72 overflow-y-auto">
+          {diff.map((r, i) => (
+            <div key={i} className="bg-slate-950/40 border border-app-border rounded p-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-slate-200">{r.section}</span>
+                <span className={`text-[9px] font-bold uppercase ${sevColor(r.severity)}`}>{r.severity}</span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-mono mt-1">
+                <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-300 border border-red-500/20 max-w-[40%] truncate" title={r.a}>{r.a}</span>
+                <span className="text-slate-600">→</span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 max-w-[40%] truncate" title={r.b}>{r.b}</span>
+              </div>
+              <p className="text-[10px] text-slate-500 italic mt-1">{r.impact}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Chatbot page ─────────────────────────────────────────────────────────
 export default function Chatbot() {
   // ── Session state ─────────────────────────────────────────────────────────
@@ -147,6 +227,14 @@ export default function Chatbot() {
   const [chatDoc,      setChatDoc]      = useState(null);
   const [userDocs,     setUserDocs]     = useState([]);
   const endRef      = useRef(null);
+
+  // Prefill the input when "Continue in Assistant" is used from Interaction History.
+  useEffect(() => {
+    try {
+      const pending = sessionStorage.getItem('continuePrompt');
+      if (pending) { setInput(pending); sessionStorage.removeItem('continuePrompt'); }
+    } catch (_) {}
+  }, []);
 
   useEffect(() => {
     const load = () => listSelectableDocs().then(setUserDocs).catch(() => setUserDocs([]));
@@ -271,7 +359,7 @@ export default function Chatbot() {
         .filter(m => !m.isWelcome)
         .map(m => ({ role: m.role, content: m.content }));
 
-      const resp = await chat(history, domain === 'All' ? undefined : domain, chatDoc?.text, chatDoc?.name);
+      const resp = await chat(history, domain === 'All' ? undefined : domain, chatDoc?.text, chatDoc?.name, 'Rules & Regulations Assistant');
 
       appendToSession(sessionId, {
         id:          'a' + Date.now(),
@@ -513,6 +601,9 @@ export default function Chatbot() {
             </>
           )}
         </div>
+
+        {/* Document comparison */}
+        <ComparePanel docs={userDocs} />
 
         {/* Suggested prompts — dynamic from uploaded doc */}
         <div className="bg-app-panel border border-app-border rounded-xl p-3">

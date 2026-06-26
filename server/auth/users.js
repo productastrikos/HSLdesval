@@ -17,6 +17,8 @@ function ensureFile() {
         passwordHash: bcrypt.hashSync('admin123', 10),
         fullName:     'System Administrator',
         role:         'admin',
+        department:   'Administration',
+        active:       true,
         createdAt:    new Date().toISOString(),
       },
       {
@@ -25,6 +27,8 @@ function ensureFile() {
         passwordHash: bcrypt.hashSync('engineer123', 10),
         fullName:     'Design Engineer',
         role:         'user',
+        department:   'Electrical',
+        active:       true,
         createdAt:    new Date().toISOString(),
       },
     ];
@@ -60,7 +64,7 @@ function getAll() {
   return load().map(strip);
 }
 
-function create({ username, password, fullName, role }) {
+function create({ username, password, fullName, role, department, active }) {
   const users = load();
   if (users.find(u => u.username === username)) throw new Error('Username already exists');
   const user = {
@@ -69,6 +73,8 @@ function create({ username, password, fullName, role }) {
     passwordHash: bcrypt.hashSync(password, 10),
     fullName:     fullName || username,
     role:         role === 'admin' ? 'admin' : 'user',
+    department:   department || 'General',
+    active:       active === undefined ? true : !!active,
     createdAt:    new Date().toISOString(),
   };
   users.push(user);
@@ -81,9 +87,11 @@ function update(id, changes) {
   const idx   = users.findIndex(u => u.id === id);
   if (idx === -1) throw new Error('User not found');
   const u = { ...users[idx] };
-  if (changes.fullName !== undefined) u.fullName = changes.fullName;
-  if (changes.role     !== undefined) u.role     = changes.role === 'admin' ? 'admin' : 'user';
-  if (changes.password)               u.passwordHash = bcrypt.hashSync(changes.password, 10);
+  if (changes.fullName   !== undefined) u.fullName   = changes.fullName;
+  if (changes.role       !== undefined) u.role       = changes.role === 'admin' ? 'admin' : 'user';
+  if (changes.department !== undefined) u.department = changes.department || 'General';
+  if (changes.active     !== undefined) u.active     = !!changes.active;
+  if (changes.password)                 u.passwordHash = bcrypt.hashSync(changes.password, 10);
   users[idx] = u;
   save(users);
   return strip(u);

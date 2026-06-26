@@ -86,18 +86,59 @@ router.post('/generate', async (req, res) => {
     let rows = parts.flat().filter(r => r && typeof r === 'object');
     if (!rows.length && errors.length) return res.status(502).json({ error: `AI BOM generation failed: ${errors[0]}` });
 
-    // Normalise to columns + dedupe by equipment name (keep the richer row)
+    // Normalise to columns + dedupe by equipment name (keep the richer row).
+    // Match keys tolerantly: a model may echo a requested column with different
+    // casing/spacing/punctuation (e.g. "Make / Vendor" vs "Make/Vendor"). Without
+    // this, every value reads as "" and every row is dropped → "No BOM items
+    // were generated" even though the model returned data.
+    const normKey = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const pick = (row, col) => {
+      if (row[col] != null && row[col] !== '') return row[col];
+      const want = normKey(col);
+      for (const k of Object.keys(row)) if (normKey(k) === want) return row[k];
+      return '';
+    };
     const nameCol = columns.find(c => /equipment|item|material|name/i.test(c)) || columns[0];
     const seen = new Map();
     for (const r of rows) {
-      const o = {}; columns.forEach(c => { o[c] = (r[c] ?? '').toString().trim(); });
+      const o = {}; columns.forEach(c => { o[c] = (pick(r, c) ?? '').toString().trim(); });
       if (!columns.some(c => o[c])) continue;
       const key = (o[nameCol] || JSON.stringify(o)).toLowerCase();
       const prev = seen.get(key);
       const filled = obj => columns.reduce((n, c) => n + (obj[c] ? 1 : 0), 0);
       if (!prev || filled(o) > filled(prev)) seen.set(key, o);
     }
-    rows = [...seen.values()].map((r, i) => ({ 'S.No': String(i + 1), ...r }));
+
+    // Last-resort salvage: the model returned rows, but none of their keys mapped
+    // to the requested columns (severe key-drift on a weaker model). Rather than
+    // tell the user "No BOM items were generated", map each row's values onto the
+    // requested columns positionally so the extracted data is never lost.
+    if (!seen.size && rows.length) {
+      console.warn(`[/api/bom/generate] key-drift salvage: ${rows.length} rows had no matching column keys — remapping positionally.`);
+      for (const r of rows) {
+        const vals = Object.values(r).map(v => (v ?? '').toString().trim());
+        if (!vals.some(Boolean)) continue;
+        const o = {}; columns.forEach((c, i) => { o[c] = vals[i] || ''; });
+        const key = (o[nameCol] || JSON.stringify(o)).toLowerCase();
+        if (!seen.has(key)) seen.set(key, o);
+      }
+    }
+    // Order system-wise & discipline-wise (prescribed HSL format) when those
+    // columns are present, so the BOM is reliably grouped regardless of LLM order.
+    const discCol = columns.find(c => /discipline/i.test(c));
+    const sysCol  = columns.find(c => /\bsystem\b/i.test(c));
+    const DISC_ORDER = ['electrical', 'machinery', 'hull', 'outfit', 'piping', 'hvac'];
+    const discRank = v => { const i = DISC_ORDER.indexOf((v || '').toLowerCase().trim()); return i === -1 ? 99 : i; };
+    let ordered = [...seen.values()];
+    if (discCol || sysCol) {
+      ordered.sort((a, b) => {
+        if (discCol) { const d = discRank(a[discCol]) - discRank(b[discCol]); if (d) return d;
+          const da = (a[discCol] || '').localeCompare(b[discCol] || ''); if (da) return da; }
+        if (sysCol)  return (a[sysCol] || '').localeCompare(b[sysCol] || '');
+        return 0;
+      });
+    }
+    rows = ordered.map((r, i) => ({ 'S.No': String(i + 1), ...r }));
     const outColumns = ['S.No', ...columns];
 
     res.json({ columns: outColumns, rows, rowCount: rows.length, sources: sources.map(s => s.name) });

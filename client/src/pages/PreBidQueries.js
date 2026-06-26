@@ -27,7 +27,7 @@ export default function PreBidQueries() {
       title="Pre-Bid Query Generation"
       subtitle="Analyse an RFP / tender / Build Specification against historical lessons and applicable rules, and automatically generate pre-bid queries — surfacing ambiguities, contradictions, missing information, impractical requirements and execution risks. The Excel download includes Page Number and Clause Description columns."
     >
-      <Card title="RFP / Tender / Build Specification" desc="Pick the document (e.g. the pre-loaded Build Specification of Tugs) or one you uploaded.">
+      <Card title="RFP / Tender / Build Specification" desc="Upload the RFP / tender / Build Specification on the Documents page, then select it here.">
         <DocSource label="RFP / Tender / Build Spec" value={rfp} onChange={setRfp} />
         <Field label="Bid focus (optional)" value={focus} onChange={setFocus} placeholder="e.g. electrical scope, propulsion, hull outfitting" />
         <RunButton onClick={run} busy={busy} busyLabel="Analysing document…">Generate Pre-Bid Queries</RunButton>

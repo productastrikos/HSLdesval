@@ -6,6 +6,9 @@ const ROLE_BADGE = {
   user:  'bg-sky-500/15 text-sky-300 border-sky-500/30',
 };
 
+// Department-wise access control (HSL MVP item 15).
+const DEPARTMENTS = ['Administration', 'Electrical', 'Machinery', 'Hull', 'Outfit', 'Piping', 'HVAC', 'Production', 'QA', 'Planning', 'Submarine', 'Ship Repairs', 'General'];
+
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -28,10 +31,12 @@ function Modal({ title, onClose, children }) {
 
 function UserForm({ initial, onSave, onCancel, isCreate }) {
   const [form, setForm] = useState({
-    username: initial?.username || '',
-    fullName: initial?.fullName || '',
-    password: '',
-    role:     initial?.role     || 'user',
+    username:   initial?.username   || '',
+    fullName:   initial?.fullName   || '',
+    password:   '',
+    role:       initial?.role       || 'user',
+    department: initial?.department  || 'General',
+    active:     initial?.active === undefined ? true : !!initial.active,
   });
   const [error,  setError]  = useState('');
   const [saving, setSaving] = useState(false);
@@ -43,7 +48,7 @@ function UserForm({ initial, onSave, onCancel, isCreate }) {
     if (isCreate && !form.password) { setError('Password is required'); return; }
     setSaving(true); setError('');
     try {
-      const payload = { fullName: form.fullName, role: form.role };
+      const payload = { fullName: form.fullName, role: form.role, department: form.department, active: form.active };
       if (isCreate) { payload.username = form.username; payload.password = form.password; }
       if (!isCreate && form.password) payload.password = form.password;
       await onSave(payload);
@@ -90,6 +95,16 @@ function UserForm({ initial, onSave, onCancel, isCreate }) {
           ))}
         </div>
       </div>
+      <div>
+        <label className="block text-[9px] uppercase tracking-widest font-bold text-slate-500 mb-1">Department</label>
+        <select className={inputCls} value={form.department} onChange={e => set('department', e.target.value)}>
+          {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+      </div>
+      <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+        <input type="checkbox" checked={form.active} onChange={e => set('active', e.target.checked)} className="accent-emerald-500" />
+        Account active (deactivated users cannot sign in)
+      </label>
       {error && <p className="text-[11px] text-red-400">⚠ {error}</p>}
       <div className="flex gap-2 pt-1">
         <button type="button" onClick={onCancel}
@@ -154,7 +169,7 @@ export default function UserManagement() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight">User Management</h1>
-          <p className="text-[11px] text-slate-400 mt-0.5">Manage system accounts and role assignments</p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Manage system accounts with role-based and department-based access · activate/deactivate · full audit trail</p>
         </div>
         <button
           onClick={() => setModal('create')}
@@ -169,11 +184,12 @@ export default function UserManagement() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: 'Total Users',    value: users.length,                              color: 'text-sky-400' },
           { label: 'Administrators', value: users.filter(u => u.role==='admin').length, color: 'text-violet-400' },
-          { label: 'Design Engineers', value: users.filter(u => u.role==='user').length, color: 'text-emerald-400' },
+          { label: 'Departments',    value: new Set(users.map(u => u.department || 'General')).size, color: 'text-amber-400' },
+          { label: 'Inactive',       value: users.filter(u => u.active === false).length, color: 'text-red-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-app-panel border border-app-border rounded-xl p-4">
             <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">{label}</div>
@@ -198,7 +214,8 @@ export default function UserManagement() {
               <tr>
                 <th className="text-left px-4 py-2.5 font-bold">User</th>
                 <th className="text-left px-4 py-2.5 font-bold">Role</th>
-                <th className="text-left px-4 py-2.5 font-bold">Access Level</th>
+                <th className="text-left px-4 py-2.5 font-bold">Department</th>
+                <th className="text-left px-4 py-2.5 font-bold">Status</th>
                 <th className="text-left px-4 py-2.5 font-bold">Created</th>
                 <th className="text-right px-4 py-2.5 font-bold">Actions</th>
               </tr>
@@ -225,16 +242,25 @@ export default function UserManagement() {
                       {u.role}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-400">
-                    {u.role === 'admin'
-                      ? 'All documents · User management · Settings'
-                      : 'Vendor documents · Validation · Comparison'}
+                  <td className="px-4 py-3">
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest bg-slate-700/30 text-slate-300 border-slate-600/40">{u.department || 'General'}</span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {u.active === false
+                      ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest bg-red-500/15 text-red-300 border-red-500/30">Inactive</span>
+                      : <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest bg-emerald-500/15 text-emerald-300 border-emerald-500/30">Active</span>}
                   </td>
                   <td className="px-4 py-3 text-slate-500 font-mono">
                     {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleUpdate(u.id, { active: u.active === false })}
+                        className={`text-[10px] px-2 py-1 rounded border ${u.active === false ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25 hover:bg-emerald-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/25 hover:bg-amber-500/20'}`}
+                      >
+                        {u.active === false ? 'Activate' : 'Deactivate'}
+                      </button>
                       <button
                         onClick={() => setModal({ user: u })}
                         className="text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700"

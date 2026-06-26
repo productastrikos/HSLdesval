@@ -6,8 +6,11 @@ import ErrorBoundary from './components/ErrorBoundary';
 import Dashboard     from './pages/Dashboard';
 import Chatbot       from './pages/Chatbot';
 import Documents     from './pages/Documents';
+import Workspace      from './pages/Workspace';
 import Settings      from './pages/Settings';
 import UserManagement from './pages/UserManagement';
+import AuditLog       from './pages/AuditLog';
+import InteractionHistory from './pages/InteractionHistory';
 import Login         from './pages/Login';
 import Layout        from './components/Layout';
 import DrawingExtract    from './pages/DrawingExtract';
@@ -20,8 +23,9 @@ import DesignReview      from './pages/DesignReview';
 import Converter         from './pages/Converter';
 import DocumentWorker    from './pages/DocumentWorker';
 import BomGenerator      from './pages/BomGenerator';
+import ShipCost          from './pages/ShipCost';
 import { getBaseKnowledge, getLibrary } from './services/aiService';
-import { hasBaseDocs, cacheBaseDocs, hasLibraryDocs, cacheLibraryDocs } from './services/docStore';
+import { hasBaseDocs, cacheBaseDocs, cacheLibraryDocs, clearLibraryDocs } from './services/docStore';
 
 // On first authenticated load on this machine, parse + cache the built-in
 // knowledge-base documents in the browser so they persist across all sessions.
@@ -41,17 +45,20 @@ function useBaseKnowledgeCache(user) {
   }, [user]);
 }
 
-// On first authenticated load, fetch the pre-parsed HSL document library and cache
-// it in the browser so every module has documents ready (no upload needed at demo).
+// On each authenticated load, sync the pre-loaded document library with the
+// server (which is authoritative). The library is intentionally empty — only the
+// four server/docs files form the built-in knowledge base, and everything else
+// must be uploaded — so this also clears any library cached by older versions.
 function useLibraryCache(user) {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     (async () => {
       try {
-        if (await hasLibraryDocs()) return;
         const { docs } = await getLibrary();
-        if (!cancelled && docs?.length) await cacheLibraryDocs(docs);
+        if (cancelled) return;
+        await clearLibraryDocs();
+        if (docs?.length) await cacheLibraryDocs(docs);
       } catch (_) { /* will retry next session */ }
     })();
     return () => { cancelled = true; };
@@ -113,20 +120,24 @@ function AppRoutes() {
         <Route path="/"              element={<Dashboard />} />
         <Route path="/chatbot"       element={<Chatbot />} />
         <Route path="/documents"     element={<Documents />} />
+        <Route path="/workspace"     element={<Workspace />} />
         <Route path="/converter"     element={<Converter />} />
         <Route path="/doc-worker"    element={<DocumentWorker />} />
         <Route path="/drawings"      element={<DrawingExtract />} />
         <Route path="/inspection"    element={<InspectionReports />} />
         <Route path="/bom"           element={<BomGenerator />} />
+        <Route path="/cost"          element={<ShipCost />} />
         <Route path="/lessons"       element={<LessonsLearned />} />
         <Route path="/compliance"    element={<TechnicalOffer />} />
         <Route path="/binding"       element={<BindingData />} />
         <Route path="/prebid"        element={<PreBidQueries />} />
         <Route path="/design-review" element={<DesignReview />} />
+        <Route path="/history"       element={<InteractionHistory />} />
 
         {/* Admin-only routes */}
         <Route path="/settings"       element={<AdminRoute><Settings /></AdminRoute>} />
         <Route path="/users"          element={<AdminRoute><UserManagement /></AdminRoute>} />
+        <Route path="/audit"          element={<AdminRoute><AuditLog /></AdminRoute>} />
 
         {/* Redirect login → home when already authenticated */}
         <Route path="/login" element={<Navigate to="/" replace />} />

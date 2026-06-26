@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { uploadDocument, compareByText, validate } from '../services/aiService';
-import { listUserDocs, getUserDoc, addUserDoc, removeUserDoc } from '../services/docStore';
+import { uploadDocument, validate } from '../services/aiService';
+import { listUserDocs, getUserDoc, addUserDoc, removeUserDoc, listProjects } from '../services/docStore';
+
+const DISCIPLINES = ['', 'Electrical', 'Machinery', 'Hull', 'Outfit', 'Piping', 'HVAC', 'Production', 'QA', 'Planning', 'General'];
 
 // ── Document type styles ──────────────────────────────────────────────────────
 const TYPE_COLOR = {
@@ -40,12 +42,14 @@ function ProgressBar({ value, color = 'bg-sky-400' }) {
 // The single place in the whole application where documents may be uploaded.
 // Type is detected automatically; the extracted content (image-only pages read
 // by the vision model) is stored in the browser for the rest of the session.
-function UploadCard({ onAdded }) {
+function UploadCard({ onAdded, projects = [] }) {
   const [stage,    setStage]    = useState('idle');
   const [progress, setProgress] = useState(0);
   const [fileInfo, setFileInfo] = useState(null);
   const [error,    setError]    = useState(null);
   const [detected, setDetected] = useState(null);
+  const [project,    setProject]    = useState('Unassigned');
+  const [discipline, setDiscipline] = useState('');
   const fileRef = useRef(null);
 
   const start = async (file) => {
@@ -65,6 +69,8 @@ function UploadCard({ onAdded }) {
         textLength: result.textLength,
         text:       result.text,
         file,                       // keep original for vision features (drawings)
+        project:    (project || 'Unassigned').trim() || 'Unassigned',
+        discipline,
       });
       setDetected(result.type);
       setStage('done'); setProgress(100);
@@ -90,7 +96,7 @@ function UploadCard({ onAdded }) {
 
   return (
     <div className={`bg-app-panel border-2 border-dashed ${stageColor} rounded-xl p-6 transition-colors`}>
-      <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff,.docx,.txt,.csv" className="hidden" onChange={onPick} />
+      <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.docx,.txt,.csv,.dwg,.dxf" className="hidden" onChange={onPick} />
       {stage === 'idle' && (
         <div className="space-y-3">
           <button onClick={() => fileRef.current?.click()} className="w-full flex flex-col items-center gap-2 text-slate-400 hover:text-sky-300 transition-colors">
@@ -98,6 +104,22 @@ function UploadCard({ onAdded }) {
             <span className="text-sm font-semibold">{stageLabel}</span>
             <span className="text-[11px] text-slate-500">The document type is detected automatically · PDF · DOCX · scanned images · CSV · up to 200 MB</span>
           </button>
+          <div className="grid sm:grid-cols-2 gap-2 pt-1 border-t border-app-border/60">
+            <div>
+              <label className="text-[9px] uppercase tracking-widest text-slate-500 font-bold block mb-1">Project / Workspace</label>
+              <input list="ws-projects" value={project} onChange={e => setProject(e.target.value)} placeholder="e.g. Tug 2400, MB/SRE…"
+                className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200" />
+              <datalist id="ws-projects">{projects.map(p => <option key={p} value={p} />)}</datalist>
+            </div>
+            <div>
+              <label className="text-[9px] uppercase tracking-widest text-slate-500 font-bold block mb-1">Discipline (optional)</label>
+              <select value={discipline} onChange={e => setDiscipline(e.target.value)}
+                className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200">
+                {DISCIPLINES.map(d => <option key={d} value={d}>{d || '— none —'}</option>)}
+              </select>
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-500 text-center">Uploads are filed under the chosen project &amp; discipline in your hierarchical Workspace.</p>
         </div>
       )}
       {stage !== 'idle' && fileInfo && (
@@ -144,185 +166,6 @@ function UploadCard({ onAdded }) {
               <span className="text-[11px] text-red-300">{error}</span>
             </div>
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ConversionTool() {
-  const [busy,   setBusy]   = useState(false);
-  const [done,   setDone]   = useState(null);
-  const [error,  setError]  = useState(null);
-  const [format, setFormat] = useState('XLSX');
-  const [file,   setFile]   = useState(null);
-  const fileRef = useRef(null);
-  const formats = ['XLSX', 'TXT', 'DOCX', 'ODF'];
-
-  const onPick = (e) => {
-    const f = e.target.files?.[0];
-    if (f) { setFile(f); setDone(null); setError(null); }
-  };
-
-  const run = async () => {
-    if (!file) return;
-    setBusy(true); setDone(null); setError(null);
-    try {
-      const token = localStorage.getItem('auth_token') || '';
-      const form  = new FormData();
-      form.append('file',   file);
-      form.append('format', format);
-      let res;
-      try {
-        res = await fetch('/api/convert', {
-          method:  'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-          body:    form,
-        });
-      } catch (_) {
-        throw new Error('Cannot reach the server. Please check that the application is running.');
-      }
-      if (res.status === 401) { window.dispatchEvent(new Event('auth:logout')); throw new Error('Session expired — please sign in again.'); }
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ error: `Request failed (HTTP ${res.status}).` }));
-        throw new Error(body.error || `Request failed (HTTP ${res.status}).`);
-      }
-      const blob     = await res.blob();
-      const baseName = file.name.replace(/\.[^/.]+$/, '');
-      const ext      = format.toLowerCase();
-      const url      = URL.createObjectURL(blob);
-      const a        = document.createElement('a');
-      a.href         = url;
-      a.download     = `${baseName}.${ext}`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setDone({ format, kb: Math.round(blob.size / 1024) });
-    } catch (e) {
-      setError(e.message);
-    }
-    setBusy(false);
-  };
-
-  return (
-    <div className="bg-app-panel border border-app-border rounded-xl p-4">
-      <h3 className="text-sm font-bold text-white mb-1">Convert PDF / Image → Editable Format</h3>
-      <p className="text-[11px] text-slate-400 mb-3">Extract content from a PDF, DOCX, or scanned image and download as Excel, plain text, or Word.</p>
-      <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.gif,.webp,.bmp" className="hidden" onChange={onPick} />
-      <button
-        onClick={() => fileRef.current?.click()}
-        className="w-full mb-3 flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors"
-      >
-        <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-        </svg>
-        <span className="truncate">{file ? file.name : 'Select PDF, DOCX, or image…'}</span>
-      </button>
-      <div className="flex items-center gap-2 mb-3">
-        {formats.map(f => (
-          <button
-            key={f}
-            onClick={() => setFormat(f)}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors ${
-              format === f
-                ? 'bg-sky-500/20 text-sky-300 border-sky-500/40'
-                : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
-            }`}
-          >{f}</button>
-        ))}
-      </div>
-      <button
-        onClick={run}
-        disabled={busy || !file}
-        className="w-full py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-500 text-white text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
-      >
-        {busy ? 'Converting…' : `Convert to .${format.toLowerCase()}`}
-      </button>
-      {error && <div className="mt-2 text-[11px] text-red-400">⚠ {error}</div>}
-      {done && (
-        <div className="mt-3 bg-emerald-500/[0.06] border border-emerald-500/30 rounded-lg p-2.5 flex items-center gap-2">
-          <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-          <div className="text-[11px] text-emerald-300 flex-1">Downloaded as .{done.format.toLowerCase()} ({done.kb} KB)</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ComparePanel({ docs }) {
-  const [docAId,  setDocAId]  = useState('');
-  const [docBId,  setDocBId]  = useState('');
-  const [diff,    setDiff]    = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState(null);
-
-  const run = async () => {
-    if (!docAId || !docBId) return;
-    setLoading(true); setDiff(null); setError(null);
-    try {
-      const [a, b] = await Promise.all([getUserDoc(docAId), getUserDoc(docBId)]);
-      const result = await compareByText(a?.text || '', b?.text || '', a?.name, b?.name);
-      if (result.diff && result.diff.length > 0) setDiff(result.diff);
-      else setError('No structured differences were found between these documents.');
-    } catch (e) { setError(e.message); }
-    setLoading(false);
-  };
-
-  const sevColor = (s) =>
-    s === 'critical' ? 'text-red-400' :
-    s === 'high'     ? 'text-orange-400' :
-    s === 'medium'   ? 'text-amber-400' :
-                       'text-sky-400';
-
-  return (
-    <div className="bg-app-panel border border-app-border rounded-xl p-4">
-      <h3 className="text-sm font-bold text-white mb-1">Document Comparison</h3>
-      <p className="text-[11px] text-slate-400 mb-3">Select two uploaded documents — the assistant performs a detailed section-by-section diff.</p>
-      {docs.length < 2 ? (
-        <div className="text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700">Upload at least two documents to compare.</div>
-      ) : (
-        <div className="space-y-2 mb-3">
-          <div>
-            <label className="text-[9px] uppercase tracking-widest text-slate-500 font-bold block mb-1">Document A</label>
-            <select value={docAId} onChange={e => setDocAId(e.target.value)} className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200">
-              <option value="">— select —</option>
-              {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-[9px] uppercase tracking-widest text-slate-500 font-bold block mb-1">Document B</label>
-            <select value={docBId} onChange={e => setDocBId(e.target.value)} className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200">
-              <option value="">— select —</option>
-              {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
-        </div>
-      )}
-      <button
-        onClick={run}
-        disabled={loading || !docAId || !docBId}
-        className="w-full py-2 rounded-lg bg-gradient-to-r from-sky-500 to-violet-500 text-white text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
-      >
-        {loading ? 'Comparing…' : 'Compare Documents'}
-      </button>
-      {error && <div className="mt-2 text-[11px] text-red-400">⚠ {error}</div>}
-      {diff && (
-        <div className="mt-3 space-y-1.5 max-h-80 overflow-y-auto">
-          {diff.map((r, i) => (
-            <div key={i} className="bg-slate-950/40 border border-app-border rounded p-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-200">{r.section}</span>
-                <span className={`text-[9px] font-bold uppercase ${sevColor(r.severity)}`}>{r.severity}</span>
-              </div>
-              <div className="flex items-center gap-2 text-[10px] font-mono mt-1">
-                <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-300 border border-red-500/20 max-w-[40%] truncate" title={r.a}>{r.a}</span>
-                <span className="text-slate-600">→</span>
-                <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 max-w-[40%] truncate" title={r.b}>{r.b}</span>
-              </div>
-              <p className="text-[10px] text-slate-500 italic mt-1">{r.impact}</p>
-            </div>
-          ))}
         </div>
       )}
     </div>
@@ -466,9 +309,9 @@ export default function Documents() {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <div className="lg:col-span-2 space-y-3">
-              <UploadCard onAdded={refreshDocs} />
+          <div className="space-y-3">
+            <div className="space-y-3">
+              <UploadCard onAdded={refreshDocs} projects={Array.from(new Set(docs.map(d => d.project || 'Unassigned')))} />
 
               <div className="bg-app-panel border border-app-border rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-app-border flex items-center gap-3 flex-wrap">
@@ -541,11 +384,6 @@ export default function Documents() {
                   </table>
                 </div>
               </div>
-            </div>
-
-            <div className="space-y-3">
-              <ConversionTool />
-              <ComparePanel docs={docs} />
             </div>
           </div>
         </>

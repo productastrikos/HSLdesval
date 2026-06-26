@@ -17,13 +17,37 @@
 // the nearest text. The resulting `summary` is fed to the vision/text model so
 // the normal AI table extraction works on CAD just as it does on PDFs/images.
 //
-// DWG is AutoCAD's binary format — there is no reliable pure-JS DWG decoder, so
-// we recover the drawing's version and any embedded ASCII labels (best effort)
-// and tell the user that exporting to DXF (or PDF) yields the richest result.
+// DWG is AutoCAD's binary format. We decode it to DXF in-process with a
+// WebAssembly build of LibreDWG (@mlightcad/libredwg-web — pure WASM, no native
+// binary, so it runs identically on Windows and the Linux host), then parse the
+// resulting DXF structurally exactly like a native .dxf upload. If decoding ever
+// fails we fall back to the previous best-effort ASCII-label recovery.
 // ─────────────────────────────────────────────────────────────────────────────
 
 let DxfParser = null;
 try { DxfParser = require('dxf-parser'); } catch (_) { DxfParser = null; }
+
+// LibreDWG is shipped as an ESM-only WASM module; load it once via dynamic
+// import() from this CommonJS file and cache the ready instance.
+let _libredwgPromise = null;
+function getLibreDwg() {
+  if (!_libredwgPromise) {
+    _libredwgPromise = import('@mlightcad/libredwg-web')
+      .then(m => m.LibreDwg.create())
+      .catch(err => { _libredwgPromise = null; throw err; });
+  }
+  return _libredwgPromise;
+}
+
+// Decode a binary DWG buffer to a DXF Buffer (or null if it cannot be decoded).
+async function dwgToDxfBuffer(buffer) {
+  const inst = await getLibreDwg();
+  const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+  let dxfBytes = null;
+  try { dxfBytes = inst.dwg_write_dxf(ab); } catch (_) { return null; }
+  if (!dxfBytes || !dxfBytes.length) return null;
+  return Buffer.from(dxfBytes);
+}
 
 // $INSUNITS code → { name, perMetre } (model units in one metre)
 const DXF_UNITS = {
@@ -174,10 +198,25 @@ function isCadName(name = '', mime = '') {
   return /\.(dwg|dxf)$/i.test(name) || /dwg|dxf|autocad/i.test(mime);
 }
 
-function parseCad(buffer, name = 'drawing') {
+async function parseCad(buffer, name = 'drawing') {
   const isDxf = /\.dxf$/i.test(name) || looksLikeDxf(buffer);
   if (isDxf) return parseDxf(buffer, name);
-  return scanBinary(buffer, name, 'dwg');
+
+  // Binary DWG → decode to DXF (LibreDWG WASM) → parse structurally like a DXF.
+  try {
+    const dxfBuf = await dwgToDxfBuffer(buffer);
+    if (dxfBuf && looksLikeDxf(dxfBuf)) {
+      const parsed  = parseDxf(dxfBuf, name.replace(/\.dwg$/i, '.dxf'));
+      const version = dwgVersion(buffer);
+      const summary = buildSummary({ kind: 'dwg', name, version, units: parsed.units, texts: parsed.texts, regions: parsed.regions });
+      const note = parsed.regions.length
+        ? `Decoded binary DWG${version ? ` (${version})` : ''}: ${parsed.texts.length} text labels and ${parsed.regions.length} closed regions (areas computed).`
+        : `Decoded binary DWG${version ? ` (${version})` : ''}: ${parsed.texts.length} text labels. No closed polylines were found, so compartment areas could not be computed.`;
+      return { kind: 'dwg', version, units: parsed.units, texts: parsed.texts, regions: parsed.regions, summary, note };
+    }
+  } catch (_) { /* fall back to best-effort ASCII recovery below */ }
+
+  return { ...scanBinary(buffer, name, 'dwg'), note: `Could not fully decode this DWG; recovered embedded text labels only. If results are thin, export the drawing to DXF or PDF from AutoCAD and re-upload.` };
 }
 
 module.exports = { parseCad, isCadName };

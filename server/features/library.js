@@ -2,11 +2,12 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pre-loaded Document Library
-// A curated set of the HSL documents, parsed once and offered to EVERY module so
-// nothing has to be uploaded during a live demo. The client caches these in the
-// browser document store, after which they appear in every document picker.
+// Intentionally EMPTY. The application's only built-in documents are the four
+// reference files in server/docs, which form the background knowledge base
+// (see server/rag). Every other document must be uploaded by the user and is
+// used per-session — nothing is pre-loaded into the module document pickers.
 //
-//   - GET /api/library            → { docs:[{id,name,type,text,isDrawing,...}], ready }
+//   - GET /api/library            → { docs:[], ready }
 // resolveLibraryFile(id) → { path, name, mime }  (whitelisted; used by Drawing
 // Intelligence to read a pre-loaded drawing's raw bytes server-side for vision).
 //
@@ -22,24 +23,12 @@ const { extractFileText } = require('../lib/extract');
 const { mapLimit } = require('./_util');
 
 const router  = express.Router();
-const HSL_DIR  = path.join(__dirname, '..', '..', 'HSLdocs');
-const DOCS_DIR = path.join(__dirname, '..', 'docs');
 const CACHE_FP = path.join(__dirname, '..', 'data', 'library-cache.json');
 
 // id → { file, dir, name, type, isDrawing }
-const MANIFEST = [
-  { id: 'LIB-BUILD-SPEC', dir: DOCS_DIR, file: 'BUILD SPECIFICATION  - input file.pdf', name: 'Build Specification (input)',          type: 'Build Specification', isDrawing: false },
-  { id: 'LIB-SOTR-HDCS',  dir: HSL_DIR,  file: 'SOTR_HDCS (1) (1).pdf',                  name: 'SOTR — HDCS',                          type: 'SOTR',              isDrawing: false },
-  { id: 'LIB-SOTR-DGPS',  dir: HSL_DIR,  file: 'EED-56-02 SOTR DGPS (1).pdf',            name: 'SOTR — DGPS (EED-56-02)',              type: 'SOTR',              isDrawing: false },
-  { id: 'LIB-SPEC-EMLOG', dir: HSL_DIR,  file: 'EED-56-03, EM LOG (COTS) - NOV 2006 (1).pdf', name: 'Specification — EM Log (EED-56-03)', type: 'SOTR',         isDrawing: false },
-  { id: 'LIB-POTS-MBSRE', dir: HSL_DIR,  file: 'MBSRE_POTS_DSVs.pdf',                    name: 'POTS — MB/SRE (DSVs)',                 type: 'POTS',              isDrawing: false },
-  { id: 'LIB-OFFER-HDCS', dir: HSL_DIR,  file: 'Technical offer of HDCS.pdf',            name: 'Technical Offer — HDCS',               type: 'Technical Offer',   isDrawing: false },
-  { id: 'LIB-COMPLY-HDCS',dir: HSL_DIR,  file: 'Technical_Compliance_HDCS.pdf',          name: 'Technical Compliance Matrix — HDCS',   type: 'Compliance Matrix', isDrawing: false },
-  { id: 'LIB-BINDING',    dir: HSL_DIR,  file: 'binding data.pdf',                       name: 'Binding Data (vendor)',                type: 'Binding Data',      isDrawing: false },
-  { id: 'LIB-SLD-MBSRE',  dir: HSL_DIR,  file: 'SLD_MB_SRE System-VC11190-91 Model.pdf', name: 'SLD — MB/SRE System (VC11190-91)',     type: 'Drawing',           isDrawing: true },
-  { id: 'LIB-BINDING-DWG',dir: HSL_DIR,  file: '01 BINDING DWG.pdf',                     name: 'Binding Drawing (GA)',                 type: 'Drawing',           isDrawing: true },
-  { id: 'LIB-DWG-EED5013',dir: HSL_DIR,  file: '68 EED-50-13-R1 (1).pdf',                name: 'Drawing — EED-50-13-R1',               type: 'Drawing',           isDrawing: true },
-];
+// Empty by design — no documents are pre-loaded. Users upload everything they
+// need; only the four server/docs reference files act as the built-in KB.
+const MANIFEST = [];
 
 function manifestPath(entry) { return path.join(entry.dir, entry.file); }
 

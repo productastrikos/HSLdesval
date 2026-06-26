@@ -17,14 +17,15 @@ const store   = require('../lib/store');
 
 const router = express.Router();
 const COLLECTION = 'feedback';
-const RATINGS = ['satisfied', 'not_satisfied'];
+// HSL MVP item 16: Satisfied / Partially Satisfied / Not Satisfied + comments.
+const RATINGS = ['satisfied', 'partially_satisfied', 'not_satisfied'];
 
 // ── POST /api/feedback ────────────────────────────────────────────────────────
 router.post('/', (req, res) => {
   try {
     const { module = 'general', rating, remarks = '', subject = '' } = req.body || {};
     if (!RATINGS.includes(rating)) {
-      return res.status(400).json({ error: 'rating must be "satisfied" or "not_satisfied".' });
+      return res.status(400).json({ error: 'rating must be "satisfied", "partially_satisfied" or "not_satisfied".' });
     }
     const item = store.insert(COLLECTION, {
       module: String(module).slice(0, 60),
@@ -53,19 +54,21 @@ router.get('/stats', (req, res) => {
   const byModule = {};
   for (const f of items) {
     const m = f.module || 'general';
-    byModule[m] = byModule[m] || { satisfied: 0, not_satisfied: 0 };
-    if (f.rating === 'satisfied') byModule[m].satisfied++;
-    else if (f.rating === 'not_satisfied') byModule[m].not_satisfied++;
+    byModule[m] = byModule[m] || { satisfied: 0, partially_satisfied: 0, not_satisfied: 0 };
+    if (byModule[m][f.rating] !== undefined) byModule[m][f.rating]++;
   }
   const satisfied = items.filter(f => f.rating === 'satisfied').length;
-  res.json({ total: items.length, satisfied, notSatisfied: items.length - satisfied, byModule });
+  const partially = items.filter(f => f.rating === 'partially_satisfied').length;
+  const notSatisfied = items.filter(f => f.rating === 'not_satisfied').length;
+  res.json({ total: items.length, satisfied, partiallySatisfied: partially, notSatisfied, byModule });
 });
 
 // ── Continuous-learning: corrective guidance for a module's prompts ───────────
+// Both "not satisfied" and "partially satisfied" remarks carry corrections.
 function getFeedbackGuidance(module, limit = 5) {
   try {
     const items = store.readAll(COLLECTION)
-      .filter(f => f.rating === 'not_satisfied' && (f.remarks || '').trim()
+      .filter(f => (f.rating === 'not_satisfied' || f.rating === 'partially_satisfied') && (f.remarks || '').trim()
         && (!module || (f.module || '').toLowerCase() === module.toLowerCase()))
       .slice(0, limit);
     if (!items.length) return '';

@@ -79,7 +79,9 @@ export async function getBaseDocs() {
 }
 
 // ── User-uploaded documents ──────────────────────────────────────────────────
-// A record: { id, name, type, mime, pages, textLength, addedAt, text, file }
+// A record: { id, name, type, mime, pages, textLength, addedAt, text, file,
+//             project, discipline }
+// project + discipline drive the hierarchical Workspace (project-wise repositories).
 export async function addUserDoc(doc) {
   const record = {
     id:         doc.id,
@@ -91,6 +93,8 @@ export async function addUserDoc(doc) {
     addedAt:    doc.addedAt || new Date().toISOString(),
     text:       doc.text || '',
     file:       doc.file || null,   // original Blob/File — used by vision features
+    project:    doc.project || 'Unassigned',
+    discipline: doc.discipline || '',
   };
   try {
     await tx(USER_STORE, 'readwrite', os => os.put(record));
@@ -110,9 +114,27 @@ export async function listUserDocs() {
   try {
     const all = await tx(USER_STORE, 'readonly', os => reqToPromise(os.getAll()));
     return all
-      .map(({ id, name, type, mime, pages, textLength, addedAt }) => ({ id, name, type, mime, pages, textLength, addedAt }))
+      .map(({ id, name, type, mime, pages, textLength, addedAt, project, discipline }) =>
+        ({ id, name, type, mime, pages, textLength, addedAt, project: project || 'Unassigned', discipline: discipline || '' }))
       .sort((a, b) => new Date(b.addedAt) - new Date(a.addedAt));
   } catch (_) { return []; }
+}
+
+// List the distinct projects (workspaces) currently in use.
+export async function listProjects() {
+  const docs = await listUserDocs();
+  return [...new Set(docs.map(d => d.project || 'Unassigned'))].sort();
+}
+
+// Reassign a document to a project / discipline (move within the workspace tree).
+export async function setDocMeta(id, { project, discipline } = {}) {
+  const rec = await getUserDoc(id);
+  if (!rec) return null;
+  if (project !== undefined)    rec.project = project || 'Unassigned';
+  if (discipline !== undefined) rec.discipline = discipline || '';
+  await tx(USER_STORE, 'readwrite', os => os.put(rec));
+  emitChange();
+  return rec;
 }
 
 export async function getUserDoc(id) {
@@ -138,6 +160,13 @@ export async function clearUserDocs() {
 export async function hasLibraryDocs() {
   try { return (await tx(LIBRARY_STORE, 'readonly', os => reqToPromise(os.count()))) > 0; }
   catch (_) { return false; }
+}
+
+export async function clearLibraryDocs() {
+  try {
+    await tx(LIBRARY_STORE, 'readwrite', os => os.clear());
+    emitChange();
+  } catch (_) {}
 }
 
 export async function cacheLibraryDocs(docs = []) {

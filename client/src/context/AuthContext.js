@@ -48,6 +48,13 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    // Record the logout in the audit trail (fire-and-forget) before clearing the token.
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      try {
+        fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+      } catch (_) {}
+    }
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     clearUserDocs();   // uploaded documents live only for the duration of the session

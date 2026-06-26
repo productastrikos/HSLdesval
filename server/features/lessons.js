@@ -36,6 +36,27 @@ function tokenScore(text, terms) {
   return terms.reduce((n, t) => n + (hay.includes(t) ? 1 : 0), 0);
 }
 
+// Corrective/proactive guidance block of the most relevant stored lessons for a
+// free-text query — injected into the Rules & Regulations assistant prompt so it
+// can give lessons-learnt-based suggestions (HSL MVP item 1).
+function getLessonsGuidance(query = '', limit = 5) {
+  try {
+    const terms = String(query).toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    if (!terms.length) return '';
+    const ranked = store.readAll(COLLECTION)
+      .map(l => ({ l, s: tokenScore([l.observation, l.system, l.project, l.category, l.recommendation, l.discipline].join(' '), terms) }))
+      .filter(x => x.s > 0)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, limit)
+      .map(x => x.l);
+    if (!ranked.length) return '';
+    const bullets = ranked.map(l =>
+      `- (${l.category}${l.system ? ' · ' + l.system : ''}${l.project ? ' · ' + l.project : ''}) ${l.observation}${l.recommendation ? ` → ${l.recommendation}` : ''}`
+    ).join('\n');
+    return `\n\nRELEVANT LESSONS LEARNT (from past HSL project inspection reports — use these to give proactive, lessons-learnt-based suggestions and cite them):\n${bullets}\n`;
+  } catch (_) { return ''; }
+}
+
 // ── GET /api/lessons ─────────────────────────────────────────────────────────
 router.get('/', (req, res) => {
   const { q = '', category = '', system = '', project = '' } = req.query;
@@ -159,4 +180,4 @@ Output ONLY the JSON.`;
   }
 });
 
-module.exports = { router, CATEGORIES, COLLECTION };
+module.exports = { router, CATEGORIES, COLLECTION, getLessonsGuidance };

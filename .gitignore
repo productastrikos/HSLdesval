@@ -22,5 +22,7 @@ server/data/library-cache.json
 # Runtime feature data — populated by user activity; must not ship pre-populated.
 server/data/inspections.json
 server/data/feedback.json
+server/data/audit.json
+server/data/interactions.json
 
 

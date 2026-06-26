@@ -56,8 +56,8 @@ async function post(path, body) {
 
 // ── API methods ───────────────────────────────────────────────────────────────
 
-export async function chat(messages, domain, chatDocText, chatDocName) {
-  return post('/chat', { messages, domain, chatDocText, chatDocName });
+export async function chat(messages, domain, chatDocText, chatDocName, module) {
+  return post('/chat', { messages, domain, chatDocText, chatDocName, module });
 }
 
 export async function extractChatDoc(file) {

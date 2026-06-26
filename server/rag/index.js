@@ -274,22 +274,14 @@ function getStatus() {
 // ── Static knowledge-base initialisation ──────────────────────────────────────
 
 // ── Static knowledge-base documents (server/docs/) ───────────────────────────
+// The application's entire built-in knowledge base is exactly these four
+// reference documents in server/docs. Everything else must be uploaded by the
+// user and is only used for that session — nothing else is pre-ingested.
 const KB_DOC_META = {
   'SOLAS CONSOLIDATED-20 (1).pdf':                                   { id: 'STATIC-SOLAS',      name: 'SOLAS Consolidated Edition 2020',               type: 'IMO',        docCategory: 'compliance' },
   'Life-Safing Appliances including LSA Code. 2010 Edition (1).pdf': { id: 'STATIC-LSA',        name: 'Life-Saving Appliances & LSA Code 2010',        type: 'IMO',        docCategory: 'compliance' },
   'main_rules_july_2024-edition.pdf':                                { id: 'STATIC-MAIN-RULES', name: 'Main Classification Rules — July 2024 Edition',  type: 'Class Rule', docCategory: 'compliance' },
   'BUILD SPECIFICATION  - input file.pdf':                           { id: 'STATIC-BUILD-SPEC', name: 'Build Specification — Input File',               type: 'Build Spec', docCategory: 'compliance' },
-  // ── HSL document repository (HSLdocs/) ──────────────────────────────────────
-  'SOTR_HDCS (1) (1).pdf':                  { id: 'HSL-SOTR-HDCS',       name: 'SOTR — HDCS',                         type: 'SOTR',              docCategory: 'compliance' },
-  'EED-56-02 SOTR DGPS (1).pdf':            { id: 'HSL-SOTR-DGPS',       name: 'SOTR — DGPS (EED-56-02)',             type: 'SOTR',              docCategory: 'compliance' },
-  'EED-56-03, EM LOG (COTS) - NOV 2006 (1).pdf': { id: 'HSL-SPEC-EMLOG', name: 'Specification — EM Log (EED-56-03)',  type: 'SOTR',              docCategory: 'compliance' },
-  'MBSRE_POTS_DSVs.pdf':                    { id: 'HSL-POTS-MBSRE',      name: 'POTS — MB/SRE (DSVs)',                type: 'POTS',              docCategory: 'compliance' },
-  'Technical offer of HDCS.pdf':            { id: 'HSL-OFFER-HDCS',      name: 'Technical Offer — HDCS',              type: 'Technical Offer',   docCategory: 'vendor' },
-  'Technical_Compliance_HDCS.pdf':          { id: 'HSL-COMPLY-HDCS',     name: 'Technical Compliance Matrix — HDCS', type: 'Compliance Matrix', docCategory: 'vendor' },
-  'binding data.pdf':                       { id: 'HSL-BINDING-DATA',    name: 'Binding Data (vendor)',               type: 'Binding Data',      docCategory: 'vendor' },
-  'SLD_MB_SRE System-VC11190-91 Model.pdf': { id: 'HSL-SLD-MBSRE',       name: 'SLD — MB/SRE System (VC11190-91)',    type: 'Drawing',           docCategory: 'vendor' },
-  '01 BINDING DWG.pdf':                     { id: 'HSL-BINDING-DWG',     name: 'Binding Drawing (GA)',                type: 'Drawing',           docCategory: 'vendor' },
-  '68 EED-50-13-R1 (1).pdf':                { id: 'HSL-DWG-EED5013',     name: 'Drawing — EED-50-13-R1',              type: 'Drawing',           docCategory: 'vendor' },
 };
 
 async function ingestDir(dir, pdfParse, defaultCategory) {
@@ -325,15 +317,12 @@ async function ingestDir(dir, pdfParse, defaultCategory) {
 async function initializeKnowledgeBase() {
   const pdfParse = require('pdf-parse');
   const docsDir  = path.join(__dirname, '..', 'docs');
-  const hslDir   = path.join(__dirname, '..', '..', 'HSLdocs');
 
   let total = 0;
-  // Base reference standards/rules (server/docs) + the ENTIRE HSL document
-  // repository (HSLdocs) so the assistant can cross-reference everything HSL
-  // shared. Scanned/drawing PDFs with no text layer are skipped here but remain
-  // fully usable in the modules (which read them with the vision model).
+  // The built-in knowledge base is ONLY the reference documents in server/docs.
+  // All other documents (HSL repository, vendor docs, etc.) must be uploaded by
+  // the user and are used per-session — they are never pre-ingested into the KB.
   total += await ingestDir(docsDir, pdfParse, 'compliance');
-  total += await ingestDir(hslDir,  pdfParse, 'vendor');
 
   _kbReady = true;
   flushCache();

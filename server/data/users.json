@@ -5,6 +5,8 @@
     "passwordHash": "$2b$10$/J4hSgWOSGJlEAW4EflCZ.ZLbQmS9JC3.4gKR3c6UVrhFAVtf20aO",
     "fullName": "System Administrator",
     "role": "admin",
+    "department": "Administration",
+    "active": true,
     "createdAt": "2026-06-03T08:00:17.133Z"
   },
   {
@@ -13,6 +15,8 @@
     "passwordHash": "$2b$10$pSRoUd73KS6Eu4Eru27VqOUVn8I0qHN4OR.zUdOBZE9beUIg.LKIG",
     "fullName": "Design Engineer",
     "role": "user",
+    "department": "Electrical",
+    "active": true,
     "createdAt": "2026-06-03T08:00:17.209Z"
   }
 ]

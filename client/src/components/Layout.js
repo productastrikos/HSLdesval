@@ -14,12 +14,14 @@ const NAV_SECTIONS = [
     label: 'AI Assistant',
     items: [
       { path: '/chatbot',        roles: ['admin','user'], icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z', label: 'Design Assistant' },
+      { path: '/history',        roles: ['admin','user'], icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', label: 'Interaction History' },
     ],
   },
   {
     label: 'Document Intelligence',
     items: [
       { path: '/documents',      roles: ['admin','user'], icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', label: 'Document Intel' },
+      { path: '/workspace',      roles: ['admin','user'], icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z', label: 'Workspace' },
       { path: '/converter',      roles: ['admin','user'], icon: 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4', label: 'Document Converter' },
       { path: '/doc-worker',     roles: ['admin','user'], icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z', label: 'Document Worker' },
       { path: '/drawings',       roles: ['admin','user'], icon: 'M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 9h16M9 4v16', label: 'Drawing Intelligence' },
@@ -34,6 +36,7 @@ const NAV_SECTIONS = [
       { path: '/binding',        roles: ['admin','user'], icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4', label: 'Binding Data Review' },
       { path: '/prebid',         roles: ['admin','user'], icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z', label: 'Pre-Bid Queries' },
       { path: '/bom',            roles: ['admin','user'], icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', label: 'BOM & SOTR' },
+      { path: '/cost',           roles: ['admin','user'], icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', label: 'Ship Cost Estimation' },
       { path: '/design-review',  roles: ['admin','user'], icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2zM12 9v3', label: 'Design Review' },
     ],
   },
@@ -41,6 +44,7 @@ const NAV_SECTIONS = [
     label: 'Administration',
     items: [
       { path: '/users',          roles: ['admin'],        icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', label: 'User Management' },
+      { path: '/audit',          roles: ['admin'],        icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2zM12 11h.01', label: 'Audit Log' },
     ],
   },
   {
@@ -59,7 +63,9 @@ const NAV_SECTIONS = [
 const SEARCH_INDEX = [
   { label:'Dashboard',             path:'/',                breadcrumb:['Dashboard'],                            icon:'📊', keywords:'overview kpi summary home main metrics validator hsl', roles:['admin','user'] },
   { label:'Design Assistant',      path:'/chatbot',         breadcrumb:['AI Assistant','Chatbot'],               icon:'📊', keywords:'chatbot ai assistant query rule interpret design natural language nlp irs dnv abs iacs imo iec naval', roles:['admin','user'] },
+  { label:'Interaction History',   path:'/history',         breadcrumb:['AI Assistant','History'],               icon:'📋', keywords:'user interaction history previous prompts queries ai responses revisit continue reuse search filter module date export', roles:['admin','user'] },
   { label:'Document Intelligence', path:'/documents',       breadcrumb:['Document Intelligence','Document Intel'], icon:'📋', keywords:'document intel ocr scanned pdf extraction parse manual equipment text searchable convert word excel odf compare validate', roles:['admin','user'] },
+  { label:'Workspace',             path:'/workspace',        breadcrumb:['Document Intelligence','Workspace'],     icon:'📦', keywords:'workspace management hierarchical project wise repository discipline folder organise upload retrieve search move documents tree', roles:['admin','user'] },
   { label:'Document Converter',    path:'/converter',       breadcrumb:['Document Intelligence','Converter'],     icon:'📋', keywords:'intelligent document converter extract custom columns prompt excel word convert information extraction table format', roles:['admin','user'] },
   { label:'Document Worker',       path:'/doc-worker',      breadcrumb:['Document Intelligence','Worker'],        icon:'📋', keywords:'intelligent document worker edit modify rewrite restructure summarise translate reformat change document word', roles:['admin','user'] },
   { label:'Drawing Intelligence',  path:'/drawings',        breadcrumb:['Document Intelligence','Drawings'],      icon:'📋', keywords:'drawing intelligence extraction cable schedule sld single line diagram general arrangement ga dwg dxf autocad equipment tag legend bom compartment area irs validation ship specifications excel mbsre vision', roles:['admin','user'] },
@@ -69,8 +75,10 @@ const SEARCH_INDEX = [
   { label:'Binding Data Review',   path:'/binding',         breadcrumb:['Procurement & Generation','Binding Data'],   icon:'📦', keywords:'vendor binding data review pots purchase order technical specification gap analysis drawings calculations certificates manuals test procedures missing', roles:['admin','user'] },
   { label:'Pre-Bid Queries',       path:'/prebid',          breadcrumb:['Procurement & Generation','Pre-Bid'],        icon:'📋', keywords:'pre bid query generation rfp tender ambiguity contradiction missing information impractical requirement execution risk clarification page number clause description build specification tugs', roles:['admin','user'] },
   { label:'BOM & SOTR Generator',  path:'/bom',             breadcrumb:['Procurement & Generation','BOM & SOTR'],     icon:'📋', keywords:'bom bill of materials generation rfp build specification equipment name oem capacity page number reference estimation calculation sotr statement of technical requirements', roles:['admin','user'] },
+  { label:'Ship Cost Estimation',  path:'/cost',            breadcrumb:['Procurement & Generation','Ship Cost'],      icon:'📋', keywords:'ship cost estimation assistant bom unit rate approved vendor database budgetary quotation bq enquiry email discipline system wise cost summary traceability', roles:['admin','user'] },
   { label:'Design Review',         path:'/design-review',   breadcrumb:['Procurement & Generation','Design Review'],  icon:'📋', keywords:'design review risk assessment checklist system wise recurring deficiency preventive measure rules historical', roles:['admin','user'] },
-  { label:'User Management',       path:'/users',           breadcrumb:['Administration','Users'],               icon:'👥', keywords:'users accounts roles admin engineer access management permissions', roles:['admin'] },
+  { label:'User Management',       path:'/users',           breadcrumb:['Administration','Users'],               icon:'👥', keywords:'users accounts roles admin engineer access management permissions department rbac', roles:['admin'] },
+  { label:'Audit Log',             path:'/audit',           breadcrumb:['Administration','Audit Log'],           icon:'📋', keywords:'audit log trail activity login logout upload download query prompt status change history security traceability export', roles:['admin'] },
   { label:'Settings',              path:'/settings',        breadcrumb:['System','Settings'],                    icon:'⚙', keywords:'settings configuration knowledge base kb rag backend server connection', roles:['admin'] },
 ];
 
@@ -102,18 +110,22 @@ const SEARCH_ICON_PATHS = {
 const PAGE_TITLES = {
   '/':                'Dashboard',
   '/chatbot':         'Design Assistant',
+  '/history':         'User Interaction History',
   '/documents':       'Document Intelligence',
+  '/workspace':       'Workspace Management',
   '/converter':       'Intelligent Document Converter',
   '/doc-worker':      'Intelligent Document Worker',
   '/drawings':        'Drawing Intelligence',
   '/inspection':      'Inspection Reports Analytics',
   '/bom':             'BOM & SOTR Generator',
+  '/cost':            'Ship Cost Estimation Assistant',
   '/lessons':         'Lessons-Learned Repository',
   '/compliance':      'Technical Offer Scrutiny',
   '/binding':         'Vendor Binding Data Review',
   '/prebid':          'Pre-Bid Query Generation',
   '/design-review':   'Design Review & Risk Assessment',
   '/users':           'User Management',
+  '/audit':           'Audit Log Management',
   '/settings':        'Settings',
 };
 

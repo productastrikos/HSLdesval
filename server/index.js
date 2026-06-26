@@ -13,6 +13,8 @@ const fs      = require('fs');
 const rag     = require('./rag');
 const bcrypt  = require('bcryptjs');
 const { sign, authenticate, requireAdmin } = require('./auth/middleware');
+const audit = require('./features/audit');
+const interactions = require('./features/interactions');
 const userStore = require('./auth/users');
 
 // A missing key is a DEPLOYMENT/config problem, not an app fault — so we never
@@ -37,6 +39,7 @@ const { extractFileText }          = require('./lib/extract');
 const { isRendererAvailable }      = require('./lib/rasterize');
 const { buildWorkbook }            = require('./lib/excel');
 const { buildWordDoc, buildWordTable, buildWordFromText } = require('./lib/word');
+const { buildPdfDoc, buildPdfTable, buildPdfFromText }    = require('./lib/pdf');
 const { getFeedbackGuidance }      = require('./features/feedback');
 
 // ── Automatic document-type classification ────────────────────────────────────
@@ -56,7 +59,7 @@ function heuristicDocType(text, name = '') {
   if (/technical offer|vendor offer|bid offer|quotation/.test(s))  return 'Technical Offer';
   if (/binding data|data sheet|datasheet|guaranteed (data|particulars)/.test(s)) return 'Binding Data';
   if (/inspection report|non[- ]?conformit|ncr\b|observation/.test(s)) return 'Inspection Report';
-  if (/cable schedule|single line diagram|\bsld\b|drawing no|drg\.? no/.test(s)) return 'Drawing';
+  if (/cable schedule|single line diagram|\bsld\b|drawing no|drg\.? no|\.dwg\b|\.dxf\b|\bcad drawing\b/.test(s)) return 'Drawing';
   if (/build specification|building specification/.test(s))        return 'Build Specification';
   if (/request for proposal|\brfp\b|tender|invitation to bid/.test(s)) return 'RFP / Tender';
   return null;
@@ -89,6 +92,9 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+// Audit trail — records meaningful mutations automatically (after authenticate
+// has run, via res 'finish'). Mounted before routes; see features/audit.js.
+app.use(audit.auditMiddleware);
 
 // ── Boot: initialise knowledge base (async, non-blocking) ─────────────────────
 rag.initializeKnowledgeBase()
@@ -154,12 +160,24 @@ app.post('/api/auth/login', (req, res) => {
     if (!username || !password) return res.status(400).json({ error: 'Username and password are required' });
 
     const user = userStore.findByUsername(username.trim().toLowerCase());
-    if (!user) return res.status(401).json({ error: 'Invalid username or password' });
+    if (!user) {
+      audit.logEvent({ user: username, module: 'Authentication', action: 'Login failed', detail: 'Unknown user', status: 401 });
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
 
     const valid = bcrypt.compareSync(password, user.passwordHash);
-    if (!valid)  return res.status(401).json({ error: 'Invalid username or password' });
+    if (!valid) {
+      audit.logEvent({ user: user.username, module: 'Authentication', action: 'Login failed', detail: 'Wrong password', status: 401 });
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    if (user.active === false) {
+      audit.logEvent({ user: user.username, module: 'Authentication', action: 'Login blocked', detail: 'Account deactivated', status: 403 });
+      return res.status(403).json({ error: 'Your account is deactivated. Contact an administrator.' });
+    }
 
     const token = sign(user);
+    audit.logEvent({ user: user.username, module: 'Authentication', action: 'Login', detail: `role: ${user.role}`, status: 200 });
     res.json({
       token,
       user: { id: user.id, username: user.username, fullName: user.fullName, role: user.role },
@@ -191,6 +209,12 @@ app.get('/api/auth/me', authenticate, (req, res) => {
   res.json({ user: req.user });
 });
 
+// POST /api/auth/logout — JWT is stateless; this only records the audit event.
+app.post('/api/auth/logout', authenticate, (req, res) => {
+  audit.logEvent({ user: req.user?.username, role: req.user?.role, module: 'Authentication', action: 'Logout', status: 200 });
+  res.json({ ok: true });
+});
+
 // ── User management (admin only) ──────────────────────────────────────────────
 
 // GET /api/auth/users
@@ -201,9 +225,9 @@ app.get('/api/auth/users', authenticate, requireAdmin, (req, res) => {
 // POST /api/auth/users
 app.post('/api/auth/users', authenticate, requireAdmin, (req, res) => {
   try {
-    const { username, password, fullName, role } = req.body;
+    const { username, password, fullName, role, department, active } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Username and password are required' });
-    const user = userStore.create({ username, password, fullName, role });
+    const user = userStore.create({ username, password, fullName, role, department, active });
     res.status(201).json(user);
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -250,7 +274,7 @@ app.delete('/api/auth/users/:id', authenticate, requireAdmin, (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/chat', authenticate, async (req, res) => {
   try {
-    const { messages = [], domain, chatDocText, chatDocName } = req.body;
+    const { messages = [], domain, chatDocText, chatDocName, module } = req.body;
 
     // Build retrieval query from up to last 3 user turns for broader context
     const userTurns  = messages.filter(m => m.role === 'user');
@@ -268,7 +292,9 @@ app.post('/api/chat', authenticate, async (req, res) => {
     const allMessages = messages.filter(m => m.role === 'user' || m.role === 'assistant');
     if (!allMessages.length) return res.status(400).json({ error: 'No messages provided' });
 
-    const model = getModel(buildSystemPrompt(context, domain, 'chat', chatDocText, chatDocName));
+    // Lessons-learnt-based suggestions (item 1): surface relevant past lessons.
+    const lessonsGuidance = require('./features/lessons').getLessonsGuidance(lastMsg);
+    const model = getModel(buildSystemPrompt(context, domain, 'chat', chatDocText, chatDocName) + lessonsGuidance);
 
     // Convert prior turns into chat history (all but the last user message)
     const history = allMessages.slice(0, -1).map(m => ({
@@ -283,6 +309,9 @@ app.post('/api/chat', authenticate, async (req, res) => {
 
     const citations  = [...new Set(context.map(c => c.source))].slice(0, 5);
     const ctxDetails = context.map(c => ({ source: c.source, section: c.section || '', score: c.score || 0 }));
+
+    // Record in the user's cross-module interaction history (item 14).
+    interactions.record(req, { module: module || 'Design Assistant', prompt: lastUserMessage, response: content, subject: chatDocName || '' });
 
     res.json({ content, citations, contextUsed: context.length, contextDetails: ctxDetails });
   } catch (err) {
@@ -791,6 +820,33 @@ app.post('/api/export/word', authenticate, (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EXPORT PDF  POST /api/export/pdf
+// Body (any of): { title, subtitle, text }           → prose document (markdown-ish)
+//                { title, subtitle, columns, rows }   → single-table document
+//                { title, subtitle, blocks }          → structured blocks
+// Produces a paginated PDF. Gives every feature page the RFP-mandated
+// "Excel, Word, and PDF" trio for the same data.
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/export/pdf', authenticate, async (req, res) => {
+  try {
+    const { title = 'Document', subtitle = '', text, columns, rows, blocks, filename } = req.body || {};
+    let buf;
+    if (typeof text === 'string')    buf = await buildPdfFromText(title, text, subtitle);
+    else if (Array.isArray(columns)) buf = await buildPdfTable(title, columns, rows || [], subtitle);
+    else if (Array.isArray(blocks))  buf = await buildPdfDoc({ title, subtitle, blocks });
+    else return res.status(400).json({ error: 'Provide text, columns+rows, or blocks.' });
+
+    const safe = (filename || title || 'document').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.pdf$/i, '');
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}.pdf"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[/api/export/pdf]', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Feature modules (all authenticated)
 //   /api/drawings     Extraction of data from drawings (cable schedules, etc.)
 //   /api/inspection   Inspection-report → categorised observations
@@ -810,8 +866,11 @@ app.use('/api/designreview', authenticate, require('./features/designreview'));
 app.use('/api/docworker',    authenticate, require('./features/docworker'));
 app.use('/api/bom',          authenticate, require('./features/bom'));
 app.use('/api/dashboard',    authenticate, require('./features/dashboard'));
+app.use('/api/cost',         authenticate, require('./features/cost'));
 app.use('/api/library',      authenticate, require('./features/library').router);
 app.use('/api/feedback',     authenticate, require('./features/feedback').router);
+app.use('/api/interactions', authenticate, interactions.router);
+app.use('/api/audit',        authenticate, requireAdmin, audit.router);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Unknown API endpoint → JSON 404 (must precede the SPA catch-all so unmatched

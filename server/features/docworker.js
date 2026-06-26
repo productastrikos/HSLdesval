@@ -88,8 +88,17 @@ router.post('/extract', async (req, res) => {
     if (!rows.length && errors.length) return res.status(502).json({ error: `AI extraction failed: ${errors[0]}` });
 
     if (!cols.length) cols = rows.length ? Object.keys(rows[0]) : [];
-    // normalise every row to the column set
-    rows = rows.map(r => { const o = {}; cols.forEach(c => { o[c] = r[c] ?? ''; }); return o; })
+    // normalise every row to the column set. Match keys tolerantly so a model
+    // that echoes a requested column with different casing/spacing/punctuation
+    // does not read as empty (which would drop every row).
+    const normKey = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const pick = (row, col) => {
+      if (row[col] != null && row[col] !== '') return row[col];
+      const want = normKey(col);
+      for (const k of Object.keys(row)) if (normKey(k) === want) return row[k];
+      return '';
+    };
+    rows = rows.map(r => { const o = {}; cols.forEach(c => { o[c] = pick(r, c) ?? ''; }); return o; })
                .filter(r => cols.some(c => String(r[c]).trim()));
 
     res.json({ name: doc.name, columns: cols, rows, rowCount: rows.length });

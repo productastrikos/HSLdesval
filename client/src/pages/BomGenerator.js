@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, MultiDocSource, Field, Spinner, FeedbackBar, ModuleChat } from '../components/feature/FeatureKit';
-import { bomGenerate, bomSotr, downloadWord } from '../services/featureApi';
+import { bomGenerate, bomSotr, downloadWord, downloadPdf, logInteraction } from '../services/featureApi';
 
-const DEFAULT_COLS = 'Equipment Name, OEM, Capacity, Quantity, Page Number, Reference';
+const DEFAULT_COLS = 'Discipline, System, Equipment Name, OEM, Capacity, Unit, Quantity, Page Number, Reference';
 
 export default function BomGenerator() {
   const [sources, setSources] = useState([]);
-  const [prompt, setPrompt]   = useState('Generate the Bill of Materials for the vessel. Where a quantity is not stated, estimate it by calculation and note the basis in the Reference (e.g. number of PA speakers from a compartment’s area, light fittings from deck area).');
+  const [prompt, setPrompt]   = useState('Generate a system-wise and discipline-wise Bill of Materials for the vessel in the prescribed HSL format. Group and order rows by Discipline (Electrical, Machinery, Hull, Outfit, Piping, HVAC…) and then by System. Where a quantity is not stated, estimate it by calculation and note the basis in the Reference (e.g. number of PA speakers from a compartment’s area, light fittings from deck area).');
   const [colText, setColText] = useState(DEFAULT_COLS);
   const [busy, setBusy]       = useState(false);
   const [error, setError]     = useState(null);
@@ -26,6 +26,8 @@ export default function BomGenerator() {
       const columns = colText.split(/[,\n;]+/).map(s => s.trim()).filter(Boolean);
       const res = await bomGenerate({ sources: sources.map(s => ({ name: s.name, text: s.text })), prompt, columns });
       setBom(res);
+      logInteraction({ module: 'BOM Generation', prompt, subject: sources.map(s => s.name).join(', '),
+        response: `Generated Bill of Materials — ${res.rowCount || res.rows?.length || 0} items, columns: ${(res.columns || []).join(' | ')}.` }).catch(() => {});
       if (!res.rows?.length) setError('No BOM items were generated. Try different source documents or prompt.');
     } catch (e) { setError(e.message); }
     setBusy(false);
@@ -35,7 +37,9 @@ export default function BomGenerator() {
     if (!bom?.rows?.length) return;
     setSotrBusy(true); setSotrErr(null); setSotr(null);
     try {
-      setSotr(await bomSotr({ bom: bom.rows, columns: bom.columns, prompt: sotrPrompt, title: 'Statement of Technical Requirements' }));
+      const s = await bomSotr({ bom: bom.rows, columns: bom.columns, prompt: sotrPrompt, title: 'Statement of Technical Requirements' });
+      setSotr(s);
+      logInteraction({ module: 'SOTR Generation', prompt: sotrPrompt, subject: 'SOTR from BOM', response: s.content || '' }).catch(() => {});
     } catch (e) { setSotrErr(e.message); }
     setSotrBusy(false);
   };
@@ -49,7 +53,10 @@ export default function BomGenerator() {
       return;
     }
     setDlBusy(true);
-    try { await downloadWord({ title: sotr.title || 'SOTR', text: sotr.content, filename: 'SOTR' }); }
+    try {
+      const payload = { title: sotr.title || 'SOTR', text: sotr.content, filename: 'SOTR' };
+      if (fmt === 'pdf') await downloadPdf(payload); else await downloadWord(payload);
+    }
     catch (e) { setSotrErr(e.message); }
     setDlBusy(false);
   };
@@ -74,7 +81,7 @@ export default function BomGenerator() {
 
       {bom && (
         <>
-          <Card title="2 · Bill of Materials" desc="Download as Excel or Word.">
+          <Card title="2 · Bill of Materials" desc="Download as Excel, Word or PDF.">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
               <StatTile label="BOM Items" value={bom.rowCount} tone="emerald" />
               <StatTile label="Columns" value={bom.columns?.length || 0} tone="sky" />
@@ -94,6 +101,9 @@ export default function BomGenerator() {
                 <div className="flex items-center justify-end gap-2">
                   <button onClick={() => downloadSotr('word')} disabled={dlBusy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 text-sky-300 border border-sky-500/30 text-[11px] font-semibold hover:bg-sky-500/25 disabled:opacity-40">
                     {dlBusy ? <Spinner /> : null} Download Word
+                  </button>
+                  <button onClick={() => downloadSotr('pdf')} disabled={dlBusy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 text-red-300 border border-red-500/30 text-[11px] font-semibold hover:bg-red-500/25 disabled:opacity-40">
+                    {dlBusy ? <Spinner /> : null} Download PDF
                   </button>
                   <button onClick={() => downloadSotr('txt')} className="px-3 py-1.5 rounded-lg bg-slate-700/40 text-slate-300 border border-slate-600 text-[11px] font-semibold hover:bg-slate-700/70">Download TXT</button>
                 </div>
