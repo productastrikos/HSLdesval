@@ -17,36 +17,53 @@
 // the nearest text. The resulting `summary` is fed to the vision/text model so
 // the normal AI table extraction works on CAD just as it does on PDFs/images.
 //
-// DWG is AutoCAD's binary format. We decode it to DXF in-process with a
-// WebAssembly build of LibreDWG (@mlightcad/libredwg-web — pure WASM, no native
-// binary, so it runs identically on Windows and the Linux host), then parse the
-// resulting DXF structurally exactly like a native .dxf upload. If decoding ever
-// fails we fall back to the previous best-effort ASCII-label recovery.
+// DWG is AutoCAD's binary format. We decode it in-process with a WebAssembly
+// build of LibreDWG (@mlightcad/libredwg-web — pure WASM, no native binary, so
+// it runs identically on Windows and the Linux host). We read the DWG into an
+// in-memory database (dwg_read_data + convert) and extract entities directly —
+// NOT via the library's dwg_write_dxf path, whose DXF writer crashes ("memory
+// access out of bounds") on many real-world AC1027/AC1032 (AutoCAD 2013/2018)
+// drawings. The in-memory reader decodes those same files cleanly. If decoding
+// ever fails we fall back to the previous best-effort ASCII-label recovery.
 // ─────────────────────────────────────────────────────────────────────────────
 
 let DxfParser = null;
 try { DxfParser = require('dxf-parser'); } catch (_) { DxfParser = null; }
 
 // LibreDWG is shipped as an ESM-only WASM module; load it once via dynamic
-// import() from this CommonJS file and cache the ready instance.
+// import() from this CommonJS file and cache the ready instance + module.
 let _libredwgPromise = null;
 function getLibreDwg() {
   if (!_libredwgPromise) {
     _libredwgPromise = import('@mlightcad/libredwg-web')
-      .then(m => m.LibreDwg.create())
+      .then(async m => ({ inst: await m.LibreDwg.create(), fileType: m.Dwg_File_Type }))
       .catch(err => { _libredwgPromise = null; throw err; });
   }
   return _libredwgPromise;
 }
 
-// Decode a binary DWG buffer to a DXF Buffer (or null if it cannot be decoded).
-async function dwgToDxfBuffer(buffer) {
-  const inst = await getLibreDwg();
-  const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
-  let dxfBytes = null;
-  try { dxfBytes = inst.dwg_write_dxf(ab); } catch (_) { return null; }
-  if (!dxfBytes || !dxfBytes.length) return null;
-  return Buffer.from(dxfBytes);
+// Decode a binary DWG buffer to an in-memory DwgDatabase ({ entities, header, ... })
+// or null if it cannot be decoded. The decoded native pointer is always freed.
+async function dwgToDatabase(buffer) {
+  let lib;
+  try {
+    lib = await getLibreDwg();
+    const { inst, fileType } = lib;
+    const ab = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    const ptr = inst.dwg_read_data(ab, fileType.DWG);
+    if (ptr == null) return null;
+    try {
+      const db = inst.convert(ptr);
+      return (db && Array.isArray(db.entities)) ? db : null;
+    } finally {
+      try { inst.dwg_free(ptr); } catch (_) { /* best effort */ }
+    }
+  } catch (_) {
+    // A hard WASM fault can corrupt the shared instance; drop it so the next
+    // upload starts from a fresh module.
+    _libredwgPromise = null;
+    return null;
+  }
 }
 
 // $INSUNITS code → { name, perMetre } (model units in one metre)
@@ -91,12 +108,70 @@ function centroid(vertices) {
   return n ? { x: x / n, y: y / n } : { x: 0, y: 0 };
 }
 
+function cleanLabel(s) {
+  return (s || '').toString()
+    .replace(/\\[A-Za-z][^;]*;/g, '')   // MTEXT formatting runs: \Fromans|c0;  \C2;
+    .replace(/\\P/g, ' ')               // MTEXT paragraph break  → space
+    .replace(/\\~/g, ' ')               // MTEXT non-breaking space
+    .replace(/[{}]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 function entText(e) {
-  return (e.text || e.string || '').toString().replace(/\\[A-Za-z][^;]*;/g, '').replace(/[{}]/g, '').trim();
+  // dxf-parser uses a string; LibreDWG's DwgDatabase nests it for ATTRIB (e.text.text).
+  let t = e.text;
+  if (t && typeof t === 'object') t = t.text;
+  return cleanLabel(t || e.string || '');
 }
 function entPos(e) {
-  const p = e.startPoint || e.position || e.insertionPoint || (e.vertices && e.vertices[0]) || {};
+  const nested = (e.text && typeof e.text === 'object') ? e.text.startPoint : null;
+  const p = e.startPoint || e.position || e.insertionPoint || nested || (e.vertices && e.vertices[0]) || {};
   return { x: p.x || 0, y: p.y || 0 };
+}
+// AutoCAD anonymous / internal block names: *U3, *D1, *Xn (and the A$Cxxxx names
+// LibreDWG emits for them). These are not meaningful labels.
+function isAnonBlock(name) {
+  return /^\*/.test(name) || /^A\$C[0-9A-F]+$/i.test(name);
+}
+function isClosedPoly(e) {
+  return e.shape === true || e.closed === true || ((e.flags & 1) === 1) || ((e.flag & 1) === 1);
+}
+
+// Pull text labels and closed-polyline regions out of an entity list. Works for
+// both dxf-parser entities and LibreDWG DwgDatabase entities (their TEXT/MTEXT/
+// ATTRIB/LWPOLYLINE shapes differ slightly; the helpers above bridge them).
+function extractEntities(entities, units) {
+  const texts = [];
+  for (const e of entities) {
+    if (e.type === 'TEXT' || e.type === 'MTEXT' || e.type === 'ATTRIB') {
+      const t = entText(e);
+      if (t) { const p = entPos(e); texts.push({ text: t, x: p.x, y: p.y, layer: e.layer || '' }); }
+    } else if (e.type === 'INSERT' && e.name && !isAnonBlock(e.name)) {
+      // Block name is the component/symbol type (e.g. "LED FLOOD LIGHT 100W") —
+      // valuable on schematics/SLDs that have no closed compartments. Anonymous
+      // internal blocks (*U, A$C…) are skipped — they're noise, not labels.
+      const p = entPos(e); texts.push({ text: cleanLabel(e.name), x: p.x, y: p.y, layer: e.layer || '' });
+    }
+  }
+
+  const regions = [];
+  for (const e of entities) {
+    if (e.type !== 'LWPOLYLINE' && e.type !== 'POLYLINE') continue;
+    const verts = (e.vertices || []).map(v => ({ x: v.x, y: v.y }));
+    if (!isClosedPoly(e) || verts.length < 3) continue;
+    const area = polyArea(verts);
+    if (area <= 0) continue;
+    const c = centroid(verts);
+    let label = '', best = Infinity;
+    for (const t of texts) {
+      const d = (t.x - c.x) ** 2 + (t.y - c.y) ** 2;
+      if (d < best) { best = d; label = t.text; }
+    }
+    const areaM2 = units.perMetre ? +(area / (units.perMetre ** 2)).toFixed(2) : null;
+    regions.push({ label: label || '(unlabelled)', layer: e.layer || '', area: +area.toFixed(2), areaM2 });
+  }
+  regions.sort((a, b) => b.area - a.area);
+  return { texts, regions };
 }
 
 function parseDxf(buffer, name) {
@@ -111,40 +186,25 @@ function parseDxf(buffer, name) {
   const unitsCode = dxf?.header?.$INSUNITS ?? 0;
   const units = DXF_UNITS[unitsCode] || DXF_UNITS[0];
 
-  const texts = [];
-  for (const e of entities) {
-    if (e.type === 'TEXT' || e.type === 'MTEXT' || e.type === 'ATTRIB') {
-      const t = entText(e);
-      if (t) { const p = entPos(e); texts.push({ text: t, x: p.x, y: p.y, layer: e.layer || '' }); }
-    }
-  }
-
-  // Closed polylines = candidate compartments / zones.
-  const regions = [];
-  for (const e of entities) {
-    if (e.type !== 'LWPOLYLINE' && e.type !== 'POLYLINE') continue;
-    const verts = (e.vertices || []).map(v => ({ x: v.x, y: v.y }));
-    const closed = e.shape === true || e.closed === true || (e.flags & 1) === 1;
-    if (!closed || verts.length < 3) continue;
-    const area = polyArea(verts);
-    if (area <= 0) continue;
-    const c = centroid(verts);
-    // Label region from the nearest text entity.
-    let label = '', best = Infinity;
-    for (const t of texts) {
-      const d = (t.x - c.x) ** 2 + (t.y - c.y) ** 2;
-      if (d < best) { best = d; label = t.text; }
-    }
-    const areaM2 = units.perMetre ? +(area / (units.perMetre ** 2)).toFixed(2) : null;
-    regions.push({ label: label || '(unlabelled)', layer: e.layer || '', area: +area.toFixed(2), areaM2 });
-  }
-  regions.sort((a, b) => b.area - a.area);
+  const { texts, regions } = extractEntities(entities, units);
 
   const summary = buildSummary({ kind: 'dxf', name, version: '', units: units.name, texts, regions });
   return {
     kind: 'dxf', version: '', units: units.name, texts, regions, summary,
     note: regions.length ? '' : 'No closed polylines were found, so compartment areas could not be computed; text labels were still extracted.',
   };
+}
+
+// Build the parse result from a decoded LibreDWG in-memory database.
+function parseDwgDb(db, name, version) {
+  const unitsCode = db?.header?.$INSUNITS ?? 0;
+  const units = DXF_UNITS[unitsCode] || DXF_UNITS[0];
+  const { texts, regions } = extractEntities(db.entities, units);
+  const summary = buildSummary({ kind: 'dwg', name, version, units: units.name, texts, regions });
+  const note = regions.length
+    ? `Decoded binary DWG${version ? ` (${version})` : ''}: ${texts.length} text labels and ${regions.length} closed regions (areas computed).`
+    : `Decoded binary DWG${version ? ` (${version})` : ''}: ${texts.length} text labels. No closed polylines were found, so compartment areas could not be computed.`;
+  return { kind: 'dwg', version, units: units.name, texts, regions, summary, note };
 }
 
 // Best-effort recovery of printable ASCII labels from a binary file.
@@ -202,19 +262,9 @@ async function parseCad(buffer, name = 'drawing') {
   const isDxf = /\.dxf$/i.test(name) || looksLikeDxf(buffer);
   if (isDxf) return parseDxf(buffer, name);
 
-  // Binary DWG → decode to DXF (LibreDWG WASM) → parse structurally like a DXF.
-  try {
-    const dxfBuf = await dwgToDxfBuffer(buffer);
-    if (dxfBuf && looksLikeDxf(dxfBuf)) {
-      const parsed  = parseDxf(dxfBuf, name.replace(/\.dwg$/i, '.dxf'));
-      const version = dwgVersion(buffer);
-      const summary = buildSummary({ kind: 'dwg', name, version, units: parsed.units, texts: parsed.texts, regions: parsed.regions });
-      const note = parsed.regions.length
-        ? `Decoded binary DWG${version ? ` (${version})` : ''}: ${parsed.texts.length} text labels and ${parsed.regions.length} closed regions (areas computed).`
-        : `Decoded binary DWG${version ? ` (${version})` : ''}: ${parsed.texts.length} text labels. No closed polylines were found, so compartment areas could not be computed.`;
-      return { kind: 'dwg', version, units: parsed.units, texts: parsed.texts, regions: parsed.regions, summary, note };
-    }
-  } catch (_) { /* fall back to best-effort ASCII recovery below */ }
+  // Binary DWG → decode in-memory with LibreDWG WASM → extract entities directly.
+  const db = await dwgToDatabase(buffer);
+  if (db && db.entities.length) return parseDwgDb(db, name, dwgVersion(buffer));
 
   return { ...scanBinary(buffer, name, 'dwg'), note: `Could not fully decode this DWG; recovered embedded text labels only. If results are thin, export the drawing to DXF or PDF from AutoCAD and re-upload.` };
 }

@@ -36,6 +36,26 @@ function tokenScore(text, terms) {
   return terms.reduce((n, t) => n + (hay.includes(t) ? 1 : 0), 0);
 }
 
+// A detailed remark for EVERY lesson (Part-E #9). Uses the stored recommendation
+// when present, enriched with context (root cause, severity, category, system);
+// composes a complete corrective/preventive remark when none was captured, so no
+// lesson is ever shown without an actionable remark.
+function detailRemark(l = {}) {
+  if (l.remarks && l.remarks.trim()) return l.remarks.trim();
+  const ctx = [l.severity && `${l.severity} severity`, l.category, l.system && `system ${l.system}`].filter(Boolean).join(', ');
+  const parts = [];
+  if (l.recommendation && l.recommendation.trim()) parts.push(l.recommendation.trim());
+  if (l.rootCause && l.rootCause.trim()) parts.push(`Root cause: ${l.rootCause.trim()}.`);
+  if (!parts.length) {
+    parts.push(`${ctx ? ctx + ' — ' : ''}${l.observation || 'Observation'}. Recommended action: review against the applicable IRS rules / Build Specification, rectify the deficiency and verify during inspection; add a corresponding design-review check item to prevent recurrence on future projects.`);
+  } else if (ctx) {
+    parts.push(`Context: ${ctx}.`);
+  }
+  return parts.join(' ');
+}
+
+function withRemarks(l) { return { ...l, remarks: detailRemark(l) }; }
+
 // Corrective/proactive guidance block of the most relevant stored lessons for a
 // free-text query — injected into the Rules & Regulations assistant prompt so it
 // can give lessons-learnt-based suggestions (HSL MVP item 1).
@@ -79,7 +99,7 @@ router.get('/', (req, res) => {
     categories: CATEGORIES,
     total: store.readAll(COLLECTION).length,
     count: items.length,
-    lessons: items,
+    lessons: items.map(withRemarks),
   });
 });
 

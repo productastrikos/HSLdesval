@@ -50,6 +50,7 @@ function UploadCard({ onAdded, projects = [] }) {
   const [detected, setDetected] = useState(null);
   const [project,    setProject]    = useState('Unassigned');
   const [discipline, setDiscipline] = useState('');
+  const [batch,      setBatch]      = useState(null);   // { done, total, errors }
   const fileRef = useRef(null);
 
   const start = async (file) => {
@@ -81,7 +82,32 @@ function UploadCard({ onAdded, projects = [] }) {
     }
   };
 
-  const onPick = (e) => { const f = e.target.files?.[0]; if (f) start(f); e.target.value = ''; };
+  // Upload many files at once (Part-E: "upload all"). Files are processed
+  // sequentially and filed under the same project/discipline.
+  const startMany = async (files) => {
+    setBatch({ done: 0, total: files.length, errors: 0 });
+    let errors = 0;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const result = await uploadDocument(file);
+        await addUserDoc({
+          id: result.docId, name: result.name, type: result.type, mime: result.mime || file.type,
+          pages: result.pages, textLength: result.textLength, text: result.text, file,
+          project: (project || 'Unassigned').trim() || 'Unassigned', discipline,
+        });
+      } catch (_) { errors++; }
+      setBatch({ done: i + 1, total: files.length, errors });
+      onAdded && onAdded();
+    }
+  };
+
+  const onPick = (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (!files.length) return;
+    if (files.length === 1) start(files[0]); else startMany(files);
+  };
 
   const stageLabel = {
     idle:     'Drag a PDF, DOCX, or image here — or click to upload',
@@ -96,8 +122,21 @@ function UploadCard({ onAdded, projects = [] }) {
 
   return (
     <div className={`bg-app-panel border-2 border-dashed ${stageColor} rounded-xl p-6 transition-colors`}>
-      <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.docx,.txt,.csv,.dwg,.dxf" className="hidden" onChange={onPick} />
-      {stage === 'idle' && (
+      <input ref={fileRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.docx,.txt,.csv,.dwg,.dxf" className="hidden" onChange={onPick} />
+      {batch && (
+        <div className="space-y-3">
+          <div className="text-sm font-semibold text-white">
+            {batch.done < batch.total
+              ? `Uploading ${batch.done} of ${batch.total}…`
+              : `Uploaded ${batch.total - batch.errors} of ${batch.total}${batch.errors ? ` · ${batch.errors} failed` : ''}`}
+          </div>
+          <ProgressBar value={Math.round((batch.done / Math.max(1, batch.total)) * 100)} color="bg-emerald-400" />
+          {batch.done >= batch.total && (
+            <button onClick={() => setBatch(null)} className="text-[10px] px-2 py-1 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Upload more</button>
+          )}
+        </div>
+      )}
+      {!batch && stage === 'idle' && (
         <div className="space-y-3">
           <button onClick={() => fileRef.current?.click()} className="w-full flex flex-col items-center gap-2 text-slate-400 hover:text-sky-300 transition-colors">
             <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>

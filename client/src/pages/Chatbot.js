@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { chat, compareByText } from '../services/aiService';
+import { chat } from '../services/aiService';
 import { listSelectableDocs, getSelectableDoc } from '../services/docStore';
 import { RULE_CORPUS, DOMAINS } from '../services/hslKnowledge';
+import { RichText, FeedbackBar } from '../components/feature/FeatureKit';
 
 // ── Session persistence ───────────────────────────────────────────────────────
 const SESSIONS_KEY = 'hsl_chat_sessions';
@@ -21,7 +22,7 @@ function makeWelcomeMsg() {
     id:        'welcome-' + Date.now(),
     role:      'assistant',
     isWelcome: true,
-    content:   "Welcome to the HSL Design Assistant.\n\nI'm grounded on the built-in reference knowledge base — SOLAS, the LSA Code, the Classification Rules and the Build Specification — and on any documents you upload. Ask me to validate Build Specifications, compare documents, extract or estimate data, generate technical specs, or perform engineering calculations.\n\nUpload a document on the Documents page and select it here as reference context, try a suggested prompt, or ask anything about your vessel design.",
+    content:   "Welcome to the HSL Rules & Regulations Assistant.\n\nI'm grounded on the built-in reference knowledge base — SOLAS, the LSA Code, the Classification Rules and the Build Specification — and on any documents you upload. Ask me to validate Build Specifications, extract or estimate data, generate technical specs, or perform engineering calculations. Answers with structured data come as tables you can copy straight into Excel.\n\nTo compare two documents, use the Document Comparison page. Upload a document on the Documents page and select it here as reference context, try a suggested prompt, or ask anything about your vessel design.",
     timestamp: new Date().toLocaleTimeString('en-IN', { hour12: false }),
     mode:      'ai',
   };
@@ -47,36 +48,10 @@ function formatDate(iso) {
   } catch { return ''; }
 }
 
-// ── Formatted message text ────────────────────────────────────────────────────
-function FormattedText({ text }) {
-  const lines = (text || '').split('\n');
-  return (
-    <div className="text-[13px] leading-relaxed text-slate-200 space-y-1">
-      {lines.map((line, i) => {
-        if (line.startsWith('### ')) return <p key={i} className="font-bold text-white text-[12px] uppercase tracking-widest mt-2">{line.slice(4)}</p>;
-        if (line.startsWith('## '))  return <p key={i} className="font-bold text-white mt-2">{line.slice(3)}</p>;
-        if (line.startsWith('**') && line.endsWith('**')) return <p key={i} className="font-bold text-white">{line.slice(2, -2)}</p>;
-        if (line.startsWith('- ') || line.startsWith('• ')) return <p key={i} className="pl-3">· {line.slice(2)}</p>;
-        if (/^\d+\.\s/.test(line)) return <p key={i} className="pl-3">{line}</p>;
-        if (line.trim() === '') return null;
-        const parts = line.split(/(\*\*[^*]+\*\*)/g);
-        return (
-          <p key={i}>
-            {parts.map((p, j) =>
-              p.startsWith('**') && p.endsWith('**')
-                ? <strong key={j} className="text-white font-semibold">{p.slice(2, -2)}</strong>
-                : p
-            )}
-          </p>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── Single chat message ───────────────────────────────────────────────────────
-function Message({ msg }) {
+function Message({ msg, onSend }) {
   const isUser = msg.role === 'user';
+  const showFeedback = !isUser && !msg.isWelcome && msg.mode !== 'error';
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : ''}`}>
       <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
@@ -88,7 +63,7 @@ function Message({ msg }) {
         <div className={`rounded-2xl px-4 py-2.5 ${
           isUser ? 'bg-slate-700/60 text-slate-100 rounded-tr-sm' : 'bg-app-panel border border-app-border rounded-tl-sm'
         }`}>
-          <FormattedText text={msg.content} />
+          <RichText text={msg.content} />
           {!isUser && msg.citations && msg.citations.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {msg.citations.map((c, i) => (
@@ -102,89 +77,28 @@ function Message({ msg }) {
               {msg.contextUsed} KB chunks retrieved
             </div>
           )}
+          {/* Follow-up question suggestions (Part-E #1: support follow-up questions) */}
+          {!isUser && msg.followups?.length > 0 && (
+            <div className="mt-2.5 pt-2 border-t border-app-border">
+              <div className="text-[9px] uppercase tracking-widest text-slate-600 font-bold mb-1.5">Follow-up questions</div>
+              <div className="flex flex-wrap gap-1.5">
+                {msg.followups.map((f, i) => (
+                  <button key={i} onClick={() => onSend && onSend(f)}
+                    className="text-left text-[10px] px-2.5 py-1.5 rounded-lg bg-white/[0.02] border border-app-border hover:bg-sky-500/[0.06] hover:border-sky-500/30 text-slate-300">
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="text-[9px] text-slate-600 mt-1 px-2">{msg.timestamp}</div>
+        {showFeedback && (
+          <div className="w-full max-w-3xl px-2">
+            <FeedbackBar module="chatbot" subject={(msg.content || '').slice(0, 60)} />
+          </div>
+        )}
       </div>
-    </div>
-  );
-}
-
-// ── Document comparison panel ─────────────────────────────────────────────────
-// Select two reference documents — the assistant performs a section-by-section diff.
-function ComparePanel({ docs }) {
-  const [docAId,  setDocAId]  = useState('');
-  const [docBId,  setDocBId]  = useState('');
-  const [diff,    setDiff]    = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState(null);
-
-  const run = async () => {
-    if (!docAId || !docBId) return;
-    setLoading(true); setDiff(null); setError(null);
-    try {
-      const [a, b] = await Promise.all([getSelectableDoc(docAId), getSelectableDoc(docBId)]);
-      const result = await compareByText(a?.text || '', b?.text || '', a?.name, b?.name);
-      if (result.diff && result.diff.length > 0) setDiff(result.diff);
-      else setError('No structured differences were found between these documents.');
-    } catch (e) { setError(e.message); }
-    setLoading(false);
-  };
-
-  const sevColor = (s) =>
-    s === 'critical' ? 'text-red-400' :
-    s === 'high'     ? 'text-orange-400' :
-    s === 'medium'   ? 'text-amber-400' :
-                       'text-sky-400';
-
-  return (
-    <div className="bg-app-panel border border-app-border rounded-xl p-3">
-      <div className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Document Comparison</div>
-      {docs.length < 2 ? (
-        <p className="text-[10px] text-slate-600 leading-relaxed">Select at least two documents (upload on the <span className="text-sky-400">Documents</span> page) to run a section-by-section diff.</p>
-      ) : (
-        <div className="space-y-2 mb-2">
-          <div>
-            <label className="text-[9px] uppercase tracking-widest text-slate-500 font-bold block mb-1">Document A</label>
-            <select value={docAId} onChange={e => setDocAId(e.target.value)} className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200">
-              <option value="">— select —</option>
-              {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="text-[9px] uppercase tracking-widest text-slate-500 font-bold block mb-1">Document B</label>
-            <select value={docBId} onChange={e => setDocBId(e.target.value)} className="w-full text-[11px] px-2 py-1.5 rounded bg-slate-900 border border-slate-700 text-slate-200">
-              <option value="">— select —</option>
-              {docs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
-        </div>
-      )}
-      <button
-        onClick={run}
-        disabled={loading || !docAId || !docBId}
-        className="w-full py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-violet-500 text-white text-[11px] font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
-      >
-        {loading ? 'Comparing…' : 'Compare Documents'}
-      </button>
-      {error && <div className="mt-2 text-[10px] text-red-400">⚠ {error}</div>}
-      {diff && (
-        <div className="mt-2 space-y-1.5 max-h-72 overflow-y-auto">
-          {diff.map((r, i) => (
-            <div key={i} className="bg-slate-950/40 border border-app-border rounded p-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-200">{r.section}</span>
-                <span className={`text-[9px] font-bold uppercase ${sevColor(r.severity)}`}>{r.severity}</span>
-              </div>
-              <div className="flex items-center gap-2 text-[10px] font-mono mt-1">
-                <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-300 border border-red-500/20 max-w-[40%] truncate" title={r.a}>{r.a}</span>
-                <span className="text-slate-600">→</span>
-                <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 max-w-[40%] truncate" title={r.b}>{r.b}</span>
-              </div>
-              <p className="text-[10px] text-slate-500 italic mt-1">{r.impact}</p>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -367,6 +281,7 @@ export default function Chatbot() {
         content:     resp.content,
         citations:   resp.citations   || [],
         contextUsed: resp.contextUsed || 0,
+        followups:   resp.followups   || [],
         timestamp:   new Date().toLocaleTimeString('en-IN', { hour12: false }),
         latencyMs:   Date.now() - startTime,
         mode:        'ai',
@@ -503,7 +418,7 @@ export default function Chatbot() {
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">AI</div>
             <div>
-              <div className="text-sm font-bold text-white">HSL Design Assistant</div>
+              <div className="text-sm font-bold text-white">Rules &amp; Regulations Assistant</div>
               <div className="text-[10px] text-slate-500">
                 Domain: <span className="text-sky-400">{contextDomain}</span>
               </div>
@@ -517,7 +432,7 @@ export default function Chatbot() {
 
         {/* Chat scroll area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map(m => <Message key={m.id} msg={m} />)}
+          {messages.map(m => <Message key={m.id} msg={m} onSend={send} />)}
           {isThinking && (
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">AI</div>
@@ -601,9 +516,6 @@ export default function Chatbot() {
             </>
           )}
         </div>
-
-        {/* Document comparison */}
-        <ComparePanel docs={userDocs} />
 
         {/* Suggested prompts — dynamic from uploaded doc */}
         <div className="bg-app-panel border border-app-border rounded-xl p-3">

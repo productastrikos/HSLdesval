@@ -59,7 +59,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <QuickTile to="/chatbot"   accent="bg-sky-500/15 text-sky-400"     title="Design Assistant"     desc="Ask anything across the entire HSL knowledge base."
+        <QuickTile to="/chatbot"   accent="bg-sky-500/15 text-sky-400"     title="Rules & Regulations Assistant"     desc="Ask anything across the entire HSL knowledge base."
           icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d={ICN.chat} /></svg>} />
         <QuickTile to="/converter" accent="bg-emerald-500/15 text-emerald-400" title="Document Converter" desc="Extract any data into custom columns → Excel / Word."
           icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d={ICN.conv} /></svg>} />

@@ -19,7 +19,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const express = require('express');
+const multer  = require('multer');
+const { extractFileText } = require('../lib/extract');
+const { generateJSON } = require('../lib/llm');
+const { MAX_UPLOAD_BYTES } = require('../lib/limits');
 const router  = express.Router();
+const upload  = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
 
 // ── Sample approved-vendor database (representative, for MVP demonstration) ────
 // Each category: matching keywords, a base unit rate (INR) and approved vendors.
@@ -260,6 +265,69 @@ router.post('/update', (req, res) => {
     }
     const summary = summarise(items);
     res.json({ project, currency: 'INR', params: p, bqApplied: applied, note: `${applied} item(s) updated from Budgetary Quotations; remaining items use representative (LPP) rates.`, items, ...summary });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
+// ── POST /api/cost/bq-parse ───────────────────────────────────────────────────
+// Upload ALL budgetary quotations as one file (a consolidated BQ sheet, a vendor
+// quote PDF, a CSV, etc.) → extract { vendor, item, rate } rows so the estimate
+// can be updated and vendors compared. Uses the AI extractor for robustness.
+router.post('/bq-parse', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Upload a BQ file (PDF, Excel, CSV, image…).' });
+    const text = await extractFileText(req.file.buffer, req.file.mimetype, req.file.originalname);
+    if (!text || !text.trim()) return res.status(422).json({ error: 'Could not read any text from the BQ file.' });
+
+    const prompt = `Extract every budgetary-quotation line from this document. Each line is a vendor's quoted unit rate for an equipment/material item.
+Return ONLY JSON: { "bqs": [ { "vendor": "", "item": "", "rate": 0, "currency": "INR", "remark": "" } ] }
+- "item" = the equipment/material name. "rate" = numeric unit price (no currency symbols/commas). "vendor" = the quoting vendor if stated.
+- One row per item per vendor. Never invent values.
+
+DOCUMENT:
+${text.slice(0, 36000)}`;
+    const out = await generateJSON(prompt, { system: 'You extract budgetary-quotation rates into clean JSON for a shipyard cost engineer.', temperature: 0, maxOutputTokens: 12000 });
+    const bqs = (Array.isArray(out.bqs) ? out.bqs : [])
+      .map(b => ({ vendor: String(b.vendor || '').trim(), item: String(b.item || '').trim(), rate: num(b.rate), currency: b.currency || 'INR', remark: b.remark || '' }))
+      .filter(b => b.item && b.rate > 0);
+    res.json({ file: req.file.originalname, count: bqs.length, bqs });
+  } catch (err) {
+    console.error('[/api/cost/bq-parse]', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
+// ── POST /api/cost/compare ────────────────────────────────────────────────────
+// Vendor-wise comparison: pivot BQ rates into an item × vendor matrix, flagging
+// the lowest quote per item.  { bom, columns, bqs:[{vendor,item,rate}] }
+router.post('/compare', (req, res) => {
+  try {
+    const { bom = [], columns = [], bqs = [] } = req.body || {};
+    if (!Array.isArray(bom) || !bom.length) return res.status(400).json({ error: 'Provide a BOM (bom[]).' });
+    if (!Array.isArray(bqs) || !bqs.length) return res.status(400).json({ error: 'Provide budgetary quotations (bqs[]) to compare.' });
+
+    const items   = priceBom(bom, columns);
+    const vendors = [...new Set(bqs.map(b => String(b.vendor || '').trim()).filter(Boolean))];
+    const hasUnnamed = bqs.some(b => !String(b.vendor || '').trim());
+    if (hasUnnamed && !vendors.length) vendors.push('Quoted');
+
+    const rows = items.map(it => {
+      const row = { 'Equipment': it.equipment, 'Qty': it.qty };
+      let best = Infinity, bestVendor = '';
+      for (const v of vendors) {
+        const m = bqs.find(b => (String(b.vendor || '').trim() === v || (v === 'Quoted' && !String(b.vendor || '').trim()))
+          && b.item && it.equipment.toLowerCase().includes(String(b.item).toLowerCase()));
+        const rate = m ? num(m.rate) : 0;
+        row[v] = rate ? fmtINR(rate) : '';
+        if (rate && rate < best) { best = rate; bestVendor = v; }
+      }
+      row['Lowest Quote'] = bestVendor ? `${bestVendor} — ${fmtINR(best)}` : '';
+      return row;
+    }).filter(r => vendors.some(v => r[v]));
+
+    const compareColumns = ['Equipment', 'Qty', ...vendors, 'Lowest Quote'];
+    res.json({ columns: compareColumns, rows, rowCount: rows.length, vendors });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }

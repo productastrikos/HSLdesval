@@ -78,6 +78,22 @@ export async function compareByText(docAText, docBText, docAName, docBName) {
   return post('/compare', { docAText, docBText, docAName, docBName });
 }
 
+// Prompt-driven comparison of two documents → structured differences table.
+export async function compareDocuments({ docAText, docBText, docAName, docBName, prompt }) {
+  return post('/compare', { docAText, docBText, docAName, docBName, prompt });
+}
+
+// Compare 2+ documents of ANY type. `files` are File objects (PDF/DOCX/image/
+// AutoCAD .dwg/.dxf — extracted server-side); `docs` are already-extracted
+// { name, text } entries (e.g. selected library docs). Returns a matrix.
+export async function compareMulti({ files = [], docs = [], prompt = '' }) {
+  const form = new FormData();
+  files.forEach(f => form.append('files', f, f.name));
+  form.append('docs', JSON.stringify(docs));
+  if (prompt) form.append('prompt', prompt);
+  return apiFetch('/compare-multi', { method: 'POST', body: form });
+}
+
 // Upload a document: the backend extracts text (vision OCR for image-only pages)
 // and auto-classifies the document type. The extracted text is returned to the
 // caller, which persists it in the browser document store.

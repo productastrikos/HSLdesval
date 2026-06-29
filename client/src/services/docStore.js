@@ -205,3 +205,38 @@ export async function listSelectableDocs() {
 export async function getSelectableDoc(id) {
   return (await getUserDoc(id)) || (await getLibraryDoc(id));
 }
+
+// ── Saved artifacts (edited BOM / SOTR etc.) ────────────────────────────────
+// Small JSON outputs the user has reviewed/edited and saved, so other modules
+// can consume them (e.g. Ship Cost reads the saved BOM). localStorage-backed;
+// session-scoped like user docs. Emits 'docstore:changed' so pickers refresh.
+const ARTIFACT_KEY = 'hsl_artifacts';
+
+function _readArtifacts() {
+  try { return JSON.parse(localStorage.getItem(ARTIFACT_KEY) || '{}'); }
+  catch (_) { return {}; }
+}
+function _writeArtifacts(obj) {
+  try { localStorage.setItem(ARTIFACT_KEY, JSON.stringify(obj)); } catch (_) {}
+  emitChange();
+}
+
+// Save (replace) the latest artifact of a given kind, e.g. 'bom' or 'sotr'.
+export function saveArtifact(kind, data, meta = {}) {
+  const all = _readArtifacts();
+  all[kind] = { kind, data, meta, savedAt: new Date().toISOString() };
+  _writeArtifacts(all);
+  return all[kind];
+}
+
+export function getArtifact(kind) {
+  return _readArtifacts()[kind] || null;
+}
+
+export function listArtifacts() {
+  return Object.values(_readArtifacts());
+}
+
+export function clearArtifacts() {
+  _writeArtifacts({});
+}

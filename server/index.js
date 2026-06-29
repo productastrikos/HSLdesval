@@ -294,7 +294,10 @@ app.post('/api/chat', authenticate, async (req, res) => {
 
     // Lessons-learnt-based suggestions (item 1): surface relevant past lessons.
     const lessonsGuidance = require('./features/lessons').getLessonsGuidance(lastMsg);
-    const model = getModel(buildSystemPrompt(context, domain, 'chat', chatDocText, chatDocName) + lessonsGuidance);
+    // Always prefer tabular output where the answer is list-like / comparative, so
+    // the user can copy it straight into Excel (Part-E: tabular outputs everywhere).
+    const TABULAR_GUIDANCE = `\n\nFORMATTING: When the answer contains any list, set of items, parameters, comparison or structured data, present it as a GitHub-flavored Markdown table (a header row, a |---| separator row, then data rows) so it can be copied directly into Excel. Use prose only for genuinely non-tabular explanations.`;
+    const model = getModel(buildSystemPrompt(context, domain, 'chat', chatDocText, chatDocName) + lessonsGuidance + TABULAR_GUIDANCE);
 
     // Convert prior turns into chat history (all but the last user message)
     const history = allMessages.slice(0, -1).map(m => ({
@@ -310,10 +313,20 @@ app.post('/api/chat', authenticate, async (req, res) => {
     const citations  = [...new Set(context.map(c => c.source))].slice(0, 5);
     const ctxDetails = context.map(c => ({ source: c.source, section: c.section || '', score: c.score || 0 }));
 
+    // Follow-up question suggestions based on the conversation so far (item 1:
+    // "support follow-up questions"). Best-effort — never block the answer.
+    let followups = [];
+    try {
+      const fuPrompt = `Based on this engineering Q&A, suggest 3 concise, specific follow-up questions the user is likely to ask next. Return ONLY a JSON array of 3 short strings.\n\nQ: ${lastUserMessage}\nA: ${content.slice(0, 1500)}`;
+      const fuRes = await getModel('You generate short follow-up question suggestions. Output only a JSON array of strings.').generateContent(fuPrompt);
+      const m = fuRes.response.text().match(/\[[\s\S]*\]/);
+      if (m) followups = (JSON.parse(m[0]) || []).filter(s => typeof s === 'string').slice(0, 3);
+    } catch (_) { followups = []; }
+
     // Record in the user's cross-module interaction history (item 14).
     interactions.record(req, { module: module || 'Design Assistant', prompt: lastUserMessage, response: content, subject: chatDocName || '' });
 
-    res.json({ content, citations, contextUsed: context.length, contextDetails: ctxDetails });
+    res.json({ content, citations, contextUsed: context.length, contextDetails: ctxDetails, followups });
   } catch (err) {
     console.error('[/api/chat]', err.message);
     res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
@@ -390,6 +403,7 @@ Return 4–8 findings covering different rule areas. Reference specific clause n
 app.post('/api/compare', authenticate, async (req, res) => {
   try {
     let { docAId, docBId, docAText, docBText, docAName, docBName } = req.body;
+    const userPrompt = (req.body.prompt || '').toString();
 
     if (docAId && !docAText) {
       docAText = rag.getDocText(docAId);
@@ -406,28 +420,31 @@ app.post('/api/compare', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Both documents are required for comparison.' });
     }
 
-    const A = docAText.slice(0, 6000);
-    const B = docBText.slice(0, 6000);
+    const A = docAText.slice(0, 9000);
+    const B = docBText.slice(0, 9000);
+    const aLabel = docAName || 'Document A';
+    const bLabel = docBName || 'Document B';
 
-    const prompt = `You are an expert in ship design document comparison. Perform a detailed section-by-section comparison.
-
-Document A — ${docAName || 'Document A'}:
+    const prompt = `You are an expert in ship-design document comparison. Compare the two documents below${userPrompt ? `, focusing on what the user asked` : ''}.
+${userPrompt ? `User instruction: ${userPrompt}\n` : ''}
+Document A — ${aLabel}:
 ${A}
 
-Document B — ${docBName || 'Document B'}:
+Document B — ${bLabel}:
 ${B}
 
 Identify all significant differences. Return ONLY a valid JSON array — no other text.
 Each difference must have:
 {
-  "section":  string,   // section or clause identifier
-  "a":        string,   // value / excerpt from Document A
-  "b":        string,   // value / excerpt from Document B
+  "section":  string,   // section / clause / parameter being compared
+  "a":        string,   // value / excerpt from Document A (${aLabel})
+  "b":        string,   // value / excerpt from Document B (${bLabel})
   "severity": "critical" | "high" | "medium" | "info",
-  "impact":   string    // compliance / design impact description
+  "impact":   string,   // compliance / design impact
+  "remark":   string    // recommendation or note
 }
 
-Return 5–12 differences covering structural, numerical, and textual changes.`;
+Return 6–20 differences covering structural, numerical and textual changes${userPrompt ? ' relevant to the user instruction' : ''}.`;
 
     const model  = getModel();
     const result = await model.generateContent(prompt);
@@ -439,9 +456,74 @@ Return 5–12 differences covering structural, numerical, and textual changes.`;
       try { diff = JSON.parse(jsonMatch[0]); } catch (_) {}
     }
 
-    res.json({ diff, rawAnalysis: text });
+    // Table-ready shape (Excel/Word/PDF export + copy-for-Excel on the client).
+    const columns = ['Section', `A · ${aLabel}`, `B · ${bLabel}`, 'Severity', 'Impact', 'Remark'];
+    const rows = diff.map(d => ({
+      'Section': d.section || '',
+      [`A · ${aLabel}`]: d.a || '',
+      [`B · ${bLabel}`]: d.b || '',
+      'Severity': d.severity || '',
+      'Impact': d.impact || '',
+      'Remark': d.remark || '',
+    }));
+
+    res.json({ diff, columns, rows, rowCount: rows.length, docAName: aLabel, docBName: bLabel, rawAnalysis: text });
   } catch (err) {
     console.error('[/api/compare]', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPARE MANY DOCUMENTS OF ANY TYPE  POST /api/compare-multi
+// Accepts 2+ documents — uploaded files (PDF/DOCX/image/AutoCAD .dwg/.dxf via the
+// universal extractor) and/or already-extracted selected docs ({name,text}) — and
+// a prompt, and returns a structured comparison matrix (one column per document).
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/compare-multi', authenticate, upload.array('files', 16), async (req, res) => {
+  try {
+    const prompt = (req.body.prompt || '').toString();
+    let selected = [];
+    try { selected = JSON.parse(req.body.docs || '[]'); } catch (_) { selected = []; }
+    selected = (Array.isArray(selected) ? selected : [])
+      .filter(d => d && d.text && String(d.text).trim())
+      .map(d => ({ name: d.name || 'document', text: String(d.text) }));
+
+    const uploaded = [];
+    for (const f of (req.files || [])) {
+      try {
+        const text = await extractFileText(f.buffer, f.mimetype, f.originalname);
+        if (text && text.trim()) uploaded.push({ name: f.originalname, text });
+      } catch (_) { /* skip unreadable file */ }
+    }
+
+    const docs = [...selected, ...uploaded];
+    if (docs.length < 2) return res.status(400).json({ error: 'Provide at least two readable documents to compare.' });
+
+    const per = Math.max(2500, Math.floor(60000 / docs.length));
+    const blocks   = docs.map((d, i) => `DOCUMENT ${i + 1} — ${d.name}:\n${d.text.slice(0, per)}`).join('\n\n');
+    const colNames = docs.map((d, i) => `Doc ${i + 1}: ${d.name}`);
+
+    const full = `You are an expert ship-design document reviewer. Compare the ${docs.length} documents below${prompt ? `, focusing on: ${prompt}` : ''}. Identify the aspects / parameters / requirements worth comparing and how EACH document treats each one.
+
+${blocks}
+
+Return ONLY valid JSON: { "rows": [ { "aspect": "", "values": ["value for Document 1", "value for Document 2", "…"], "difference": "", "severity": "critical|high|medium|info", "remark": "" } ] }
+- "values" MUST contain exactly ${docs.length} entries, in the same order as the documents above. Use "" where a document does not address the aspect.
+Produce 6-25 rows covering the most important differences and commonalities.`;
+    const out = await generateJSON(full, { temperature: 0.2, maxOutputTokens: 16000 });
+    const columns = ['Aspect', ...colNames, 'Difference', 'Severity', 'Remark'];
+    const rows = (Array.isArray(out.rows) ? out.rows : []).map(r => {
+      const o = { 'Aspect': r.aspect || r.Aspect || '' };
+      colNames.forEach((c, i) => { o[c] = (Array.isArray(r.values) ? r.values[i] : '') || ''; });
+      o['Difference'] = r.difference || '';
+      o['Severity']   = r.severity || '';
+      o['Remark']     = r.remark || '';
+      return o;
+    });
+    res.json({ columns, rows, rowCount: rows.length, documents: docs.map(d => d.name) });
+  } catch (err) {
+    console.error('[/api/compare-multi]', err.message);
     res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });

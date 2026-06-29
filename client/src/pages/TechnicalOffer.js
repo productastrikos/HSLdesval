@@ -13,6 +13,29 @@ function remap(items, keys, heads) {
   return (items || []).map(o => { const r = {}; keys.forEach((k, i) => { r[heads[i]] = o[k] ?? ''; }); return r; });
 }
 
+// Build a vendor-wise comparison matrix: one row per TTS requirement, one column
+// per offer, showing each vendor's compliance status side-by-side (Part-E #5).
+function buildComparison(results) {
+  const offers = results.map(r => r.offer);
+  const map = new Map();
+  results.forEach(r => {
+    (r.matrix || []).forEach(m => {
+      const key = (m.clauseRef && m.clauseRef.trim())
+        ? `c:${m.clauseRef.trim().toLowerCase()}`
+        : `r:${(m.requirement || '').trim().toLowerCase().slice(0, 80)}`;
+      if (!map.has(key)) map.set(key, { clauseRef: m.clauseRef || '', requirement: m.requirement || '', byOffer: {} });
+      map.get(key).byOffer[r.offer] = m.status || '';
+    });
+  });
+  const columns = ['Clause Ref', 'TTS Requirement', ...offers];
+  const rows = [...map.values()].map(v => {
+    const row = { 'Clause Ref': v.clauseRef, 'TTS Requirement': v.requirement };
+    offers.forEach(o => { row[o] = v.byOffer[o] || '—'; });
+    return row;
+  });
+  return { columns, rows };
+}
+
 function OfferResult({ system, r }) {
   const matrixRows = remap(r.matrix, M_COLS, M_HEAD);
   const queryRows  = remap(r.queries, Q_COLS, Q_HEAD);
@@ -64,7 +87,7 @@ export default function TechnicalOffer() {
 
   return (
     <Page
-      title="Technical Offer Scrutiny"
+      title="Technical Offer Evaluation"
       subtitle="Review one or MORE vendor technical offers against the Tender Technical Specification (TTS / SOTR). Auto-prepare a clause-by-clause Technical Compliance Matrix, flag deviations / exclusions / ambiguities, generate vendor queries, and produce explicit recommendations (e.g. “Seek this document from the vendor”) in the Excel output."
     >
       <Card title="Documents" desc="Provide the TTS/SOTR and one or more vendor technical offers (select multiple to compare).">
@@ -81,6 +104,17 @@ export default function TechnicalOffer() {
       {res && (
         <>
           <div className="text-[11px] text-slate-400">TTS: <span className="text-slate-200">{res.tts}</span> · {res.offerCount} offer{res.offerCount === 1 ? '' : 's'} evaluated</div>
+          {res.results.length > 1 && (() => {
+            const cmp = buildComparison(res.results);
+            return (
+              <Card title="Vendor-wise Compliance Comparison" desc="Each TTS requirement against every vendor offer, side-by-side. Copy for Excel or export.">
+                <ResultTable columns={cmp.columns} rows={cmp.rows}
+                  title="Vendor-wise Compliance" sheetName="Vendor Comparison"
+                  downloadName={`Vendor_Compliance_${(res.system || 'offers').replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`} />
+                <FeedbackBar module="compliance" subject={`Vendor comparison · ${res.system || res.tts}`} />
+              </Card>
+            );
+          })()}
           {res.results.map((r, i) => <OfferResult key={i} system={res.system} r={r} />)}
           {res.citations?.length > 0 && <div className="text-[10px] text-slate-500">Grounded in: {res.citations.join(' · ')}</div>}
         </>

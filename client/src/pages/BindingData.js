@@ -33,7 +33,7 @@ export default function BindingData() {
 
   return (
     <Page
-      title="Vendor Binding Data Review"
+      title="Binding Data Gap Analysis & Information Extraction"
       subtitle="Review vendor binding data / technical submissions against the Purchase Order Technical Specification (POTS). Identify missing or inadequate drawings, calculations, certificates, manuals, test procedures and compliance documents, and get the specific points to seek from the vendor before approval."
     >
       <Card title="Documents" desc="Provide the POTS and the vendor's binding-data submission.">

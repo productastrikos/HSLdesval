@@ -19,6 +19,7 @@ export default function DesignReview() {
   const [busy, setBusy]     = useState(false);
   const [error, setError]   = useState(null);
   const [res, setRes]       = useState(null);
+  const [rtab, setRtab]     = useState('checklist');   // checklist | risk
 
   const run = async () => {
     if (!system.trim()) { setError('Enter the system to review.'); return; }
@@ -33,8 +34,8 @@ export default function DesignReview() {
 
   return (
     <Page
-      title="Design Review & Risk Assessment"
-      subtitle="Generate a system-wise design-review checklist tied to class rules and standards, plus a risk register informed by historical project data — highlighting recurring deficiencies and recommending preventive measures."
+      title="Design Review Assistant"
+      subtitle="Generate a system-wise design-review checklist tied to class rules and standards, plus a risk analysis informed by historical project data — highlighting recurring deficiencies and recommending preventive measures. Checklist and Risk Analysis are on separate tabs."
     >
       <Card title="Review Subject" desc="Name the system; optionally attach the design document under review.">
         <div className="grid md:grid-cols-3 gap-3">
@@ -65,18 +66,23 @@ export default function DesignReview() {
             {res.citations?.length > 0 && <div className="text-[10px] text-slate-500">Grounded in: {res.citations.join(' · ')}</div>}
           </Card>
 
-          <Card title="Design-Review Checklist">
-            <ResultTable columns={C_HEAD} rows={checklistRows} title="Design-Review Checklist" sheetName="Checklist"
-              downloadName={`DesignReview_${system.replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`}
-              extraSheets={[{ name: 'Risk Register', columns: R_HEAD, rows: riskRows }]}
-              note="The Excel download includes a second sheet with the risk register." />
-          </Card>
+          <div className="flex gap-1.5">
+            <button onClick={() => setRtab('checklist')} className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border ${rtab === 'checklist' ? 'bg-sky-500/20 text-sky-300 border-sky-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>Checklist ({res.checklistCount || 0})</button>
+            <button onClick={() => setRtab('risk')} className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border ${rtab === 'risk' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>Risk Analysis ({res.riskCount || 0})</button>
+          </div>
 
-          {riskRows.length > 0 && (
-            <Card title="Risk Register">
-              <ResultTable columns={R_HEAD} rows={riskRows} title="Risk Register" sheetName="Risk Register"
-                downloadName={`RiskRegister_${system.replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`} />
-              <FeedbackBar module="designreview" subject={system} />
+          {rtab === 'checklist' ? (
+            <Card title="Design-Review Checklist">
+              <ResultTable columns={C_HEAD} rows={checklistRows} title="Design-Review Checklist" sheetName="Checklist"
+                downloadName={`DesignReview_Checklist_${system.replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`} />
+              <FeedbackBar module="designreview" subject={`Checklist · ${system}`} />
+            </Card>
+          ) : (
+            <Card title="Risk Analysis">
+              <ResultTable columns={R_HEAD} rows={riskRows} title="Risk Analysis" sheetName="Risk Analysis"
+                downloadName={`DesignReview_RiskAnalysis_${system.replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`}
+                note={riskRows.length ? '' : 'No risks were identified for this system.'} />
+              <FeedbackBar module="designreview" subject={`Risk analysis · ${system}`} />
             </Card>
           )}
         </>

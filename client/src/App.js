@@ -21,7 +21,7 @@ import BindingData       from './pages/BindingData';
 import PreBidQueries     from './pages/PreBidQueries';
 import DesignReview      from './pages/DesignReview';
 import Converter         from './pages/Converter';
-import DocumentWorker    from './pages/DocumentWorker';
+import DocumentCompare   from './pages/DocumentCompare';
 import BomGenerator      from './pages/BomGenerator';
 import ShipCost          from './pages/ShipCost';
 import { getBaseKnowledge, getLibrary } from './services/aiService';
@@ -122,7 +122,7 @@ function AppRoutes() {
         <Route path="/documents"     element={<Documents />} />
         <Route path="/workspace"     element={<Workspace />} />
         <Route path="/converter"     element={<Converter />} />
-        <Route path="/doc-worker"    element={<DocumentWorker />} />
+        <Route path="/compare"       element={<DocumentCompare />} />
         <Route path="/drawings"      element={<DrawingExtract />} />
         <Route path="/inspection"    element={<InspectionReports />} />
         <Route path="/bom"           element={<BomGenerator />} />

@@ -50,7 +50,7 @@ export default function InteractionHistory() {
   return (
     <Page
       title="User Interaction History"
-      subtitle="Your searches, prompts and AI-generated responses across every module — searchable and filterable. Revisit a previous interaction, reuse its prompt, or continue it in the Design Assistant. Export the full history to Excel, Word or PDF."
+      subtitle="Your searches, prompts and AI-generated responses across every module — searchable and filterable. Revisit a previous interaction, reuse its prompt, or continue it in the Rules & Regulations Assistant. Export the full history to Excel, Word or PDF."
     >
       <Card title="Filters" desc="Find past interactions by module, keyword or date range.">
         <div className="grid md:grid-cols-4 gap-3">

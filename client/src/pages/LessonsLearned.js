@@ -48,7 +48,7 @@ function Repository() {
 
   const tableRows = (data?.lessons || []).map((l, i) => ({
     'Sl.No': i + 1, 'Observation': l.observation, 'Category': l.category, 'System': l.system || '',
-    'Project': l.project || '', 'Severity': l.severity || '', 'Recommendation': l.recommendation || '', 'Source': l.source || '',
+    'Project': l.project || '', 'Severity': l.severity || '', 'Detailed Remarks': l.remarks || l.recommendation || '', 'Source': l.source || '',
   }));
 
   return (
@@ -76,7 +76,7 @@ function Repository() {
 
       {data?.lessons?.length > 0 && (
         <Card title="Lessons">
-          <ResultTable columns={['Sl.No', 'Observation', 'Category', 'System', 'Project', 'Severity', 'Recommendation', 'Source']}
+          <ResultTable columns={['Sl.No', 'Observation', 'Category', 'System', 'Project', 'Severity', 'Detailed Remarks', 'Source']}
             rows={tableRows} title="Lessons-Learned" sheetName="Lessons" downloadName="Lessons_Learned" />
           <div className="space-y-2 mt-2">
             {data.lessons.slice(0, 60).map(l => (
@@ -89,7 +89,7 @@ function Repository() {
                     {l.project && <span className="text-[10px] text-slate-600">· {l.project}</span>}
                   </div>
                   <div className="text-slate-200">{l.observation}</div>
-                  {l.recommendation && <div className="text-slate-400">↳ {l.recommendation}</div>}
+                  <div className="text-slate-400"><span className="text-slate-500 font-semibold">Remarks:</span> {l.remarks || l.recommendation || '—'}</div>
                 </div>
                 <button onClick={() => onDelete(l.id)} className="text-slate-600 hover:text-red-400" title="Delete">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>

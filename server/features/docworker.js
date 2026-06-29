@@ -67,41 +67,78 @@ Extract one row per distinct item. Never fabricate values.`;
   return generateJSON(full, { system: EXTRACT_SYS + getFeedbackGuidance('converter'), temperature: 0, maxOutputTokens: 16000 });
 }
 
+// Extract rows from a single document's text into `cols` (cols may grow if the
+// model chooses them). Returns { cols, rows, errors }.
+async function extractFromText(text, prompt, startCols) {
+  let cols = startCols.slice();
+  const chunks = windows(text);
+  const errors = [];
+  const parts = await mapLimit(chunks, 2, async (c) => {
+    try {
+      const out = await extractWindow(c, prompt, cols);
+      if (!cols.length && Array.isArray(out.columns) && out.columns.length) cols = normaliseColumns(out.columns);
+      return Array.isArray(out.rows) ? out.rows : [];
+    } catch (e) { errors.push(e.message); return []; }
+  });
+  return { cols, rows: parts.flat().filter(r => r && typeof r === 'object'), errors };
+}
+
 // POST /api/docworker/extract
+// Single doc:  { text|docId, name, prompt, columns[] }
+// Multi-doc:   { sources:[{name,text}], prompt, columns[] }  → consolidated table
+//              with a "Source" column for traceability (Part-E #7d).
 router.post('/extract', async (req, res) => {
   try {
     const prompt  = req.body.prompt || '';
     const columns = normaliseColumns(req.body.columns);
-    const doc = resolveDocText({ id: req.body.docId, text: req.body.text, name: req.body.name }, 'document');
+    const sources = Array.isArray(req.body.sources)
+      ? req.body.sources.filter(s => s && s.text && s.text.trim())
+      : [];
 
-    let cols = columns;
-    const chunks = windows(doc.text);
-    const errors = [];
-    const parts = await mapLimit(chunks, 2, async (c) => {
-      try {
-        const out = await extractWindow(c, prompt, cols);
-        if (!cols.length && Array.isArray(out.columns) && out.columns.length) cols = normaliseColumns(out.columns);
-        return Array.isArray(out.rows) ? out.rows : [];
-      } catch (e) { errors.push(e.message); return []; }
-    });
-    let rows = parts.flat().filter(r => r && typeof r === 'object');
-    if (!rows.length && errors.length) return res.status(502).json({ error: `AI extraction failed: ${errors[0]}` });
-
-    if (!cols.length) cols = rows.length ? Object.keys(rows[0]) : [];
-    // normalise every row to the column set. Match keys tolerantly so a model
-    // that echoes a requested column with different casing/spacing/punctuation
-    // does not read as empty (which would drop every row).
     const normKey = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
-    const pick = (row, col) => {
+    const pickKey = (row, col) => {
       if (row[col] != null && row[col] !== '') return row[col];
       const want = normKey(col);
       for (const k of Object.keys(row)) if (normKey(k) === want) return row[k];
       return '';
     };
-    rows = rows.map(r => { const o = {}; cols.forEach(c => { o[c] = pick(r, c) ?? ''; }); return o; })
-               .filter(r => cols.some(c => String(r[c]).trim()));
 
-    res.json({ name: doc.name, columns: cols, rows, rowCount: rows.length });
+    let cols = columns;
+    let rows = [];
+    let name = '';
+    const errors = [];
+
+    if (sources.length > 1) {
+      // Consolidate across all documents, tagging each row with its source.
+      for (const s of sources) {
+        const r = await extractFromText(s.text, prompt, cols);
+        if (r.cols.length > cols.length) cols = r.cols;
+        r.errors.forEach(e => errors.push(e));
+        for (const row of r.rows) rows.push({ ...row, __source: s.name || 'source' });
+      }
+      if (!cols.length) cols = rows.length ? Object.keys(rows[0]).filter(k => k !== '__source') : [];
+      if (!cols.some(c => /source/i.test(c))) cols = [...cols, 'Source'];
+      rows = rows.map(r => {
+        const o = {};
+        cols.forEach(c => { o[c] = /^source$/i.test(c) ? (r.__source || '') : (pickKey(r, c) ?? ''); });
+        return o;
+      }).filter(r => cols.some(c => !/source/i.test(c) && String(r[c]).trim()));
+      name = `${sources.length} documents`;
+    } else {
+      const single = sources.length === 1
+        ? { text: sources[0].text, name: sources[0].name || 'document' }
+        : resolveDocText({ id: req.body.docId, text: req.body.text, name: req.body.name }, 'document');
+      name = single.name;
+      const r = await extractFromText(single.text, prompt, cols);
+      cols = r.cols; rows = r.rows; r.errors.forEach(e => errors.push(e));
+      if (!cols.length) cols = rows.length ? Object.keys(rows[0]) : [];
+      rows = rows.map(r2 => { const o = {}; cols.forEach(c => { o[c] = pickKey(r2, c) ?? ''; }); return o; })
+                 .filter(r2 => cols.some(c => String(r2[c]).trim()));
+    }
+
+    if (!rows.length && errors.length) return res.status(502).json({ error: `AI extraction failed: ${errors[0]}` });
+
+    res.json({ name, columns: cols, rows, rowCount: rows.length });
   } catch (err) {
     console.error('[/api/docworker/extract]', err.message);
     res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });

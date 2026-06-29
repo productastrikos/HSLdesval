@@ -132,7 +132,7 @@ export default function Settings() {
           </div>
           <div className="flex items-start gap-2">
             <span className="text-sky-400 font-mono font-bold mt-0.5">4.</span>
-            <span>Use the <span className="text-sky-400">Design Assistant</span> and the analysis tools — each lets you pick one of your uploaded documents.</span>
+            <span>Use the <span className="text-sky-400">Rules &amp; Regulations Assistant</span> and the analysis tools — each lets you pick one of your uploaded documents.</span>
           </div>
         </div>
       </div>

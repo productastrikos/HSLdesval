@@ -312,4 +312,59 @@ Produce 8-20 findings across multiple areas and across ALL the provided sources.
   }
 });
 
+// ── POST /api/drawings/compare  (two drawings → prompt-driven differences) ────
+const compareUpload = upload.fields([{ name: 'fileA', maxCount: 1 }, { name: 'fileB', maxCount: 1 }]);
+router.post('/compare', compareUpload, async (req, res) => {
+  try {
+    const resolve = (field, libId, label) => {
+      const f = req.files && req.files[field] && req.files[field][0];
+      if (f) return { buffer: f.buffer, mime: f.mimetype, name: f.originalname };
+      if (libId) {
+        const lib = resolveLibraryFile(libId);
+        if (!lib) { const e = new Error(`Selected ${label} was not found on the server.`); e.status = 404; throw e; }
+        return { buffer: fs.readFileSync(lib.path), mime: lib.mime, name: lib.name };
+      }
+      const e = new Error(`Provide ${label} (upload a file or pick a pre-loaded drawing).`); e.status = 400; throw e;
+    };
+    const a = resolve('fileA', req.body.libraryIdA, 'Drawing A');
+    const b = resolve('fileB', req.body.libraryIdB, 'Drawing B');
+    const prompt = req.body.prompt || '';
+
+    const [da, db] = await Promise.all([
+      describeDrawing(a.buffer, a.mime, a.name),
+      describeDrawing(b.buffer, b.mime, b.name),
+    ]);
+    if (!da.trim() || !db.trim()) {
+      return res.status(422).json({ error: 'Could not read one of the drawings. Try clearer files or DXF exports.' });
+    }
+
+    const colA = `Drawing A · ${a.name}`;
+    const colB = `Drawing B · ${b.name}`;
+    const full = `Compare these two engineering drawings${prompt ? `, focusing on: ${prompt}` : ''}. Identify every meaningful difference.
+
+DRAWING A — ${a.name}:
+${da.slice(0, 9000)}
+
+DRAWING B — ${b.name}:
+${db.slice(0, 9000)}
+
+Return ONLY JSON: { "rows": [ { "Aspect":"", "Drawing A":"", "Drawing B":"", "Difference":"", "Severity":"critical|high|medium|low", "Remark":"" } ] }
+Produce 6-20 rows covering equipment, ratings, cabling, connections, layout and annotations.`;
+    const out = await generateJSON(full, { system: SYSTEM + getFeedbackGuidance('drawings'), temperature: 0.2, maxOutputTokens: 12000 });
+    const columns = ['Aspect', colA, colB, 'Difference', 'Severity', 'Remark'];
+    const rows = (Array.isArray(out.rows) ? out.rows : []).map(r => ({
+      'Aspect': r['Aspect'] || r.aspect || '',
+      [colA]:   r['Drawing A'] || r.a || '',
+      [colB]:   r['Drawing B'] || r.b || '',
+      'Difference': r['Difference'] || r.difference || '',
+      'Severity':   r['Severity'] || r.severity || '',
+      'Remark':     r['Remark'] || r.remark || '',
+    }));
+    res.json({ drawingA: a.name, drawingB: b.name, columns, rows, rowCount: rows.length });
+  } catch (err) {
+    console.error('[/api/drawings/compare]', err);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
 module.exports = router;

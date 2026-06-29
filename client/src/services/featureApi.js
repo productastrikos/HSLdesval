@@ -171,6 +171,16 @@ export async function validateDrawing({ file, libraryId, prompt, buildSpecText, 
   return postForm('/drawings/validate', form);
 }
 
+export async function compareDrawings({ fileA, libraryIdA, fileB, libraryIdB, prompt }) {
+  const form = new FormData();
+  if (fileA) form.append('fileA', fileA);
+  if (libraryIdA) form.append('libraryIdA', libraryIdA);
+  if (fileB) form.append('fileB', fileB);
+  if (libraryIdB) form.append('libraryIdB', libraryIdB);
+  if (prompt) form.append('prompt', prompt);
+  return postForm('/drawings/compare', form);
+}
+
 // ── Intelligent Document Converter / Worker ──────────────────────────────────
 export async function docworkerExtract(body) { return postJSON('/docworker/extract', body); }
 export async function docworkerEdit({ file, docId, text, name, instruction }) {
@@ -192,6 +202,12 @@ export async function costVendors()        { return getJSON('/cost/vendors'); }
 export async function costEstimate(body)    { return postJSON('/cost/estimate', body); }
 export async function costEnquiries(body)   { return postJSON('/cost/enquiries', body); }
 export async function costUpdate(body)      { return postJSON('/cost/update', body); }
+export async function costCompare(body)      { return postJSON('/cost/compare', body); }
+export async function costBqParse(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return postForm('/cost/bq-parse', form);
+}
 
 // ── Prompt-driven dashboard analytics ────────────────────────────────────────
 export async function dashboardAnalytics(body) { return postJSON('/dashboard/analytics', body); }

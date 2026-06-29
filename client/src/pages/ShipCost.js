@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, MultiDocSource, Field, Spinner, FeedbackBar, ModuleChat } from '../components/feature/FeatureKit';
-import { bomGenerate, costEstimate, costEnquiries, costUpdate, downloadWord, downloadPdf, logInteraction } from '../services/featureApi';
+import { bomGenerate, costEstimate, costEnquiries, costUpdate, costCompare, costBqParse, downloadWord, downloadPdf, logInteraction } from '../services/featureApi';
+import { getArtifact } from '../services/docStore';
 
 const BOM_COLS = 'Discipline, System, Equipment Name, OEM, Capacity, Unit, Quantity, Reference';
 const fmt = n => '₹' + Math.round(n || 0).toLocaleString('en-IN');
@@ -33,26 +34,44 @@ export default function ShipCost() {
   const [bqVendor, setBqVendor] = useState('');
   const [bqRate, setBqRate]   = useState('');
   const [bqs, setBqs]         = useState([]);
+  const [bqFileBusy, setBqFileBusy] = useState(false);
+  const [cmp, setCmp]         = useState(null);     // vendor-wise comparison
+  const bqFileRef = useRef(null);
+
+  // Price + prepare enquiries for a given BOM ({ columns, rows }).
+  const estimateFor = async (b) => {
+    setBom(b);
+    setStage('Estimating cost with representative rates…');
+    const e = await costEstimate({ bom: b.rows, columns: b.columns, project, params: estParams() });
+    setEst(e);
+    setStage('Identifying approved vendors & preparing BQ enquiries…');
+    const q = await costEnquiries({ bom: b.rows, columns: b.columns, project });
+    setEnq(q);
+    logInteraction({ module: 'Ship Cost Estimation', prompt: `Estimate cost for ${project || 'project'}`, subject: (b.sources || []).join(', '),
+      response: `Preliminary estimate ${e.totalFmt} across ${e.items.length} items; ${q.vendorCount} vendor BQ enquiries prepared.` }).catch(() => {});
+  };
 
   const run = async () => {
     if (!sources.length) { setError('Select at least one source (RFP / Build Specification).'); return; }
-    setBusy(true); setError(null); setBom(null); setEst(null); setEnq(null); setBqs([]);
+    setBusy(true); setError(null); setBom(null); setEst(null); setEnq(null); setBqs([]); setCmp(null);
     try {
       setStage('Generating Bill of Materials…');
       const columns = BOM_COLS.split(',').map(s => s.trim());
       const b = await bomGenerate({ sources: sources.map(s => ({ name: s.name, text: s.text })),
         prompt: 'Generate a system-wise and discipline-wise BOM for ship cost estimation. Include Discipline, System, Equipment Name, Capacity and Quantity.', columns });
       if (!b.rows?.length) { setError('No BOM items were generated from these sources.'); setBusy(false); return; }
-      setBom(b);
-      setStage('Estimating cost with representative rates…');
-      const e = await costEstimate({ bom: b.rows, columns: b.columns, project, params: estParams() });
-      setEst(e);
-      setStage('Identifying approved vendors & preparing BQ enquiries…');
-      const q = await costEnquiries({ bom: b.rows, columns: b.columns, project });
-      setEnq(q);
-      logInteraction({ module: 'Ship Cost Estimation', prompt: `Estimate cost for ${project || 'project'}`, subject: sources.map(s => s.name).join(', '),
-        response: `Preliminary estimate ${e.totalFmt} across ${e.items.length} items; ${q.vendorCount} vendor BQ enquiries prepared.` }).catch(() => {});
+      await estimateFor(b);
     } catch (e) { setError(e.message); }
+    setBusy(false); setStage('');
+  };
+
+  // Use the BOM saved on the BOM & SOTR page (Part-E: BOM → cost estimation).
+  const useSavedBom = async () => {
+    const art = getArtifact('bom');
+    if (!art?.data?.rows?.length) { setError('No saved BOM found. Generate and Save a BOM on the BOM & SOTR page first.'); return; }
+    setBusy(true); setError(null); setEst(null); setEnq(null); setBqs([]); setCmp(null);
+    try { await estimateFor({ columns: art.data.columns, rows: art.data.rows, sources: art.meta?.sources || ['saved BOM'] }); }
+    catch (e) { setError(e.message); }
     setBusy(false); setStage('');
   };
 
@@ -61,10 +80,29 @@ export default function ShipCost() {
     setBqs([...bqs, { item: bqItem.trim(), vendor: bqVendor.trim(), rate: Number(bqRate) }]);
     setBqItem(''); setBqVendor(''); setBqRate('');
   };
+
+  // Upload all BQs at once as a file → parse rows → add to the BQ list.
+  const onBqFile = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    setBqFileBusy(true); setError(null);
+    try {
+      const r = await costBqParse(f);
+      if (!r.bqs?.length) setError('No budgetary-quotation rows could be read from that file.');
+      else setBqs(prev => [...prev, ...r.bqs]);
+    } catch (err) { setError(err.message); }
+    setBqFileBusy(false);
+  };
+
   const applyBqs = async () => {
     if (!bom || !bqs.length) return;
     setBusy(true); setError(null);
-    try { setEst(await costUpdate({ bom: bom.rows, columns: bom.columns, bqs, project, params: estParams() })); }
+    try {
+      setEst(await costUpdate({ bom: bom.rows, columns: bom.columns, bqs, project, params: estParams() }));
+      // Vendor-wise comparison when BQs span multiple vendors.
+      try { setCmp(await costCompare({ bom: bom.rows, columns: bom.columns, bqs })); } catch (_) { setCmp(null); }
+    }
     catch (e) { setError(e.message); }
     setBusy(false);
   };
@@ -122,7 +160,13 @@ export default function ShipCost() {
             <Field label="Delivery schedule (months)" value={deliveryMonths} onChange={setDeliveryMonths} placeholder="18" />
           </div>
         </div>
-        <RunButton onClick={run} busy={busy} busyLabel={stage || 'Working…'}>Generate BOM &amp; Estimate Cost</RunButton>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <RunButton onClick={run} busy={busy} busyLabel={stage || 'Working…'}>Generate BOM &amp; Estimate Cost</RunButton>
+          <button onClick={useSavedBom} disabled={busy}
+            className="sm:w-auto px-4 py-2.5 rounded-lg bg-slate-700/50 text-slate-200 border border-slate-600 text-xs font-semibold hover:bg-slate-700 disabled:opacity-40 whitespace-nowrap">
+            Use saved BOM
+          </button>
+        </div>
         <ErrorNote>{error}</ErrorNote>
         {busy && stage && <div className="text-[10px] text-slate-500 flex items-center gap-1.5"><Spinner /> {stage}</div>}
       </Card>
@@ -163,7 +207,15 @@ export default function ShipCost() {
             <FeedbackBar module="cost" subject={`Cost estimate ${project}`} />
           </Card>
 
-          <Card title="4 · Refine with Budgetary Quotations" desc="Enter a received BQ unit rate for an item (matched by name) to override the representative rate and auto-update the estimate.">
+          <Card title="4 · Refine with Budgetary Quotations" desc="Upload all received BQs as one file (they're read automatically), or add a BQ rate by hand. Rates override the representative rate and update the estimate; multi-vendor BQs are compared side-by-side.">
+            <div>
+              <input ref={bqFileRef} type="file" accept=".pdf,.docx,.txt,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.tiff,.bmp,.webp" className="hidden" onChange={onBqFile} />
+              <button onClick={() => bqFileRef.current?.click()} disabled={bqFileBusy}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors disabled:opacity-40">
+                {bqFileBusy ? <Spinner /> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>}
+                {bqFileBusy ? 'Reading BQ file…' : 'Upload all BQs as one file (PDF / Excel / CSV)'}
+              </button>
+            </div>
             <div className="grid md:grid-cols-4 gap-2 items-end">
               <Field label="Item (name contains)" value={bqItem} onChange={setBqItem} placeholder="e.g. Generator" />
               <Field label="Vendor" value={bqVendor} onChange={setBqVendor} placeholder="e.g. Cummins India" />
@@ -172,16 +224,30 @@ export default function ShipCost() {
             </div>
             {bqs.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
-                {bqs.map((b, i) => <span key={i} className="text-[10px] px-2 py-1 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30">{b.item} = {fmt(b.rate)}{b.vendor ? ` · ${b.vendor}` : ''}</span>)}
+                {bqs.map((b, i) => (
+                  <span key={i} className="text-[10px] px-2 py-1 rounded bg-sky-500/10 text-sky-300 border border-sky-500/30 flex items-center gap-1">
+                    {b.item} = {fmt(b.rate)}{b.vendor ? ` · ${b.vendor}` : ''}
+                    <button onClick={() => setBqs(bqs.filter((_, j) => j !== i))} className="text-sky-400/70 hover:text-red-300">×</button>
+                  </span>
+                ))}
               </div>
             )}
             <RunButton onClick={applyBqs} busy={busy} disabled={!bqs.length} busyLabel="Updating estimate…">Apply BQs &amp; Update Estimate</RunButton>
           </Card>
+
+          {cmp?.rows?.length > 0 && (
+            <Card title="5 · Vendor-wise BQ Comparison" desc="Each item's quoted rate per vendor, with the lowest highlighted. Copy for Excel or export.">
+              <ResultTable columns={cmp.columns} rows={cmp.rows}
+                title="Vendor-wise BQ Comparison" sheetName="Vendor Comparison"
+                downloadName={`Vendor_Comparison_${(project || 'estimate').replace(/[^a-z0-9]+/gi, '_').slice(0, 24)}`} />
+              <FeedbackBar module="cost" subject={`Vendor comparison ${project}`} />
+            </Card>
+          )}
         </>
       )}
 
       {enq && (
-        <Card title="5 · Vendor-wise BQ Enquiries" desc="Auto-prepared enquiry emails for Administrator review & dispatch through HSL's external email system. Download as Word or PDF.">
+        <Card title="6 · Vendor-wise BQ Enquiries" desc="Auto-prepared enquiry emails for Administrator review & dispatch through HSL's external email system. Download as Word or PDF.">
           <div className="space-y-2">
             {enq.enquiries.map((e, i) => (
               <div key={i} className="rounded-lg border border-app-border bg-slate-950/30">

@@ -165,9 +165,29 @@ export function MultiDocSource({ label, values = [], onChange, filter }) {
     }
   };
 
+  const selectAll = async () => {
+    const missing = docs.filter(d => !values.some(v => v.id === d.id));
+    const loaded = (await Promise.all(missing.map(d => getSelectableDoc(d.id)))).filter(Boolean)
+      .map(d => ({ id: d.id, name: d.name, text: d.text, libraryFile: d.libraryFile, source: d.source }));
+    onChange([...values, ...loaded]);
+  };
+  const clearAll = () => onChange([]);
+  const allSelected = docs.length > 0 && docs.every(d => values.some(v => v.id === d.id));
+
   return (
     <div className="space-y-2">
-      <label className="text-[11px] font-semibold text-slate-300">{label}</label>
+      <div className="flex items-center justify-between gap-2">
+        <label className="text-[11px] font-semibold text-slate-300">{label}</label>
+        {docs.length > 0 && (
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={selectAll} disabled={allSelected}
+              className="text-[10px] font-semibold text-sky-300 hover:text-sky-200 disabled:opacity-40">Select all</button>
+            <span className="text-slate-600">·</span>
+            <button type="button" onClick={clearAll} disabled={!values.length}
+              className="text-[10px] font-semibold text-slate-400 hover:text-white disabled:opacity-40">Clear</button>
+          </div>
+        )}
+      </div>
       {docs.length === 0 ? (
         <div className="text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700">
           No documents available — upload one on the <span className="text-sky-400">Documents</span> page.
@@ -191,12 +211,131 @@ export function MultiDocSource({ label, values = [], onChange, filter }) {
   );
 }
 
-/* ─── Result table with Excel export ─────────────────────────────────────── */
-export function ResultTable({ columns, rows, title, downloadName = 'export', sheetName = 'Sheet1', extraSheets = [], note, enableWord = true, enablePdf = true }) {
+/* ─── Tabular helpers: copy-paste into Excel (TSV) & editable column lists ─── */
+export function rowsToTSV(columns, rows) {
+  const clean = v => String(v ?? '').replace(/\t/g, ' ').replace(/\r?\n/g, ' ').trim();
+  const head = columns.join('\t');
+  const body = (rows || []).map(r => columns.map(c => clean(r[c])).join('\t')).join('\n');
+  return body ? `${head}\n${body}` : head;
+}
+
+// Copies the table as tab-separated text so it pastes straight into Excel/Sheets
+// and autofills across cells (the Gemini/ChatGPT "copy table" behaviour).
+export function CopyExcelButton({ columns, rows, label = 'Copy for Excel' }) {
+  const [done, setDone] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(rowsToTSV(columns, rows));
+      setDone(true); setTimeout(() => setDone(false), 1500);
+    } catch (_) { /* clipboard blocked */ }
+  };
+  return (
+    <button onClick={copy} type="button"
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/15 text-violet-300 border border-violet-500/30 text-[11px] font-semibold hover:bg-violet-500/25 transition-colors">
+      {done ? '✓ Copied' : label}
+    </button>
+  );
+}
+
+// Editable list of output columns — lets the user adjust the table format BEFORE
+// running extraction. Backed by a plain string[] so the result table reuses it.
+export function EditableColumns({ columns = [], onChange, label = 'Output columns (edit before extracting)' }) {
+  const setAt = (i, v) => { const c = [...columns]; c[i] = v; onChange(c); };
+  const add   = () => onChange([...columns, '']);
+  const del   = (i) => onChange(columns.filter((_, j) => j !== i));
+  return (
+    <div className="space-y-1">
+      {label && <label className="text-[11px] font-semibold text-slate-300">{label}</label>}
+      <div className="flex flex-wrap gap-1.5">
+        {columns.map((c, i) => (
+          <span key={i} className="flex items-center rounded-lg bg-slate-900 border border-slate-700 pl-2">
+            <input value={c} onChange={e => setAt(i, e.target.value)} placeholder="column"
+              className="bg-transparent text-[11px] text-slate-200 py-1 w-32 outline-none" />
+            <button type="button" onClick={() => del(i)} className="px-1.5 text-slate-500 hover:text-red-300">×</button>
+          </span>
+        ))}
+        <button type="button" onClick={add}
+          className="px-2.5 py-1 rounded-lg border border-dashed border-slate-600 text-[11px] text-slate-400 hover:text-sky-300 hover:border-sky-500/40">+ Add column</button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Markdown-table parsing + rich text (renders | a | b | tables) ────────── */
+function splitCells(line) {
+  return line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(s => s.trim());
+}
+function parseMarkdownTable(lines) {
+  if (lines.length < 2) return null;
+  if (!/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[1]) || !lines[1].includes('-')) return null;
+  const cols = splitCells(lines[0]);
+  const rows = lines.slice(2).map(l => { const cs = splitCells(l); const o = {}; cols.forEach((c, i) => { o[c] = cs[i] ?? ''; }); return o; });
+  return { columns: cols, rows };
+}
+// Render assistant text, turning contiguous "| … |" blocks into HTML tables with
+// a Copy-for-Excel button. Falls back to the lightweight inline markdown styling.
+export function RichText({ text }) {
+  const lines = (text || '').split('\n');
+  const blocks = [];
+  let buf = [];
+  const flush = () => { if (buf.length) { blocks.push({ type: 'text', lines: buf }); buf = []; } };
+  for (let i = 0; i < lines.length; i++) {
+    const isTableLine = /\|.*\|/.test(lines[i]);
+    if (isTableLine) {
+      const tbl = [];
+      while (i < lines.length && /\|/.test(lines[i]) && lines[i].trim()) { tbl.push(lines[i]); i++; }
+      i--;
+      const parsed = parseMarkdownTable(tbl);
+      if (parsed && parsed.columns.length) { flush(); blocks.push({ type: 'table', ...parsed }); }
+      else buf.push(...tbl);
+    } else buf.push(lines[i]);
+  }
+  flush();
+  return (
+    <div className="text-[12px] leading-relaxed text-slate-200 space-y-2">
+      {blocks.map((b, bi) => b.type === 'table'
+        ? (
+          <div key={bi} className="space-y-1">
+            <div className="overflow-auto rounded-lg border border-app-border max-h-80">
+              <table className="w-full text-[11px] border-collapse">
+                <thead className="text-[9px] uppercase tracking-widest text-slate-500 bg-white/[0.03] sticky top-0">
+                  <tr>{b.columns.map((c, j) => <th key={j} className="text-left px-3 py-1.5 font-semibold whitespace-nowrap border-b border-app-border">{c}</th>)}</tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  {b.rows.map((r, ri) => <tr key={ri}>{b.columns.map((c, ci) => <td key={ci} className="px-3 py-1.5 text-slate-300 whitespace-pre-wrap break-words">{r[c]}</td>)}</tr>)}
+                </tbody>
+              </table>
+            </div>
+            <CopyExcelButton columns={b.columns} rows={b.rows} />
+          </div>
+        )
+        : (
+          <div key={bi} className="space-y-1">
+            {b.lines.map((line, i) => {
+              if (!line.trim()) return null;
+              if (/^#{1,3}\s/.test(line)) return <p key={i} className="font-bold text-white">{line.replace(/^#{1,3}\s/, '')}</p>;
+              if (/^\s*[-*•]\s/.test(line)) return <p key={i} className="pl-3">· {line.replace(/^\s*[-*•]\s/, '')}</p>;
+              const parts = line.split(/(\*\*[^*]+\*\*)/g);
+              return <p key={i}>{parts.map((p, j) => p.startsWith('**') && p.endsWith('**')
+                ? <strong key={j} className="text-white font-semibold">{p.slice(2, -2)}</strong> : p)}</p>;
+            })}
+          </div>
+        ))}
+    </div>
+  );
+}
+
+/* ─── Result table with Excel export (+ optional inline editing) ──────────── */
+export function ResultTable({ columns, rows, title, downloadName = 'export', sheetName = 'Sheet1', extraSheets = [], note, enableWord = true, enablePdf = true, editable = false, onRowsChange, onColumnsChange }) {
   const [busy, setBusy] = useState(false);
   const [wbusy, setWbusy] = useState(false);
   const [pbusy, setPbusy] = useState(false);
   const [err, setErr]   = useState(null);
+
+  const editCell = (ri, col, v) => { if (!onRowsChange) return; const next = rows.map((r, i) => i === ri ? { ...r, [col]: v } : r); onRowsChange(next); };
+  const addRow   = () => { if (!onRowsChange) return; const blank = {}; columns.forEach(c => { blank[c] = ''; }); onRowsChange([...rows, blank]); };
+  const delRow   = (ri) => { if (!onRowsChange) return; onRowsChange(rows.filter((_, i) => i !== ri)); };
+  const renameCol = (idx, name) => { if (!onColumnsChange) return; const next = [...columns]; next[idx] = name; onColumnsChange(next); };
 
   const onDownload = async () => {
     setBusy(true); setErr(null);
@@ -228,7 +367,8 @@ export function ResultTable({ columns, rows, title, downloadName = 'export', she
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="text-[11px] text-slate-400">{title} <span className="text-slate-500">· {rows.length} row{rows.length === 1 ? '' : 's'}</span></div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <CopyExcelButton columns={columns} rows={rows} />
           <button
             onClick={onDownload}
             disabled={busy || !rows.length}
@@ -263,23 +403,44 @@ export function ResultTable({ columns, rows, title, downloadName = 'export', she
       <div className="overflow-auto rounded-lg border border-app-border max-h-[60vh]">
         <table className="w-full text-[11px] border-collapse">
           <thead className="text-[9px] uppercase tracking-widest text-slate-500 bg-white/[0.03] sticky top-0">
-            <tr>{columns.map(c => <th key={c} className="text-left px-3 py-2 font-semibold whitespace-nowrap border-b border-app-border">{c}</th>)}</tr>
+            <tr>
+              {columns.map((c, ci) => (
+                <th key={ci} className="text-left px-3 py-2 font-semibold whitespace-nowrap border-b border-app-border">
+                  {editable && onColumnsChange
+                    ? <input value={c} onChange={e => renameCol(ci, e.target.value)} className="bg-transparent text-slate-300 uppercase outline-none w-28" />
+                    : c}
+                </th>
+              ))}
+              {editable && <th className="border-b border-app-border w-8" />}
+            </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.04]">
             {rows.map((r, i) => (
               <tr key={i} className="hover:bg-white/[0.02] align-top">
                 {columns.map(c => (
                   <td key={c} className="px-3 py-2 text-slate-300">
-                    {PILL_COLS.test(c) && String(r[c] ?? '').trim() && String(r[c]).length < 24
-                      ? <Pill value={String(r[c])}>{String(r[c])}</Pill>
-                      : <span className="whitespace-pre-wrap break-words">{r[c] ?? ''}</span>}
+                    {editable
+                      ? <textarea value={r[c] ?? ''} onChange={e => editCell(i, c, e.target.value)} rows={1}
+                          className="w-full min-w-[7rem] bg-slate-900/60 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-200 resize-y" />
+                      : (PILL_COLS.test(c) && String(r[c] ?? '').trim() && String(r[c]).length < 24
+                        ? <Pill value={String(r[c])}>{String(r[c])}</Pill>
+                        : <span className="whitespace-pre-wrap break-words">{r[c] ?? ''}</span>)}
                   </td>
                 ))}
+                {editable && (
+                  <td className="px-2 py-2 text-center">
+                    <button type="button" onClick={() => delRow(i)} className="text-slate-500 hover:text-red-300" title="Delete row">×</button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {editable && (
+        <button type="button" onClick={addRow}
+          className="px-2.5 py-1 rounded-lg border border-dashed border-slate-600 text-[11px] text-slate-400 hover:text-sky-300 hover:border-sky-500/40">+ Add row</button>
+      )}
       {note && <div className="text-[10px] text-slate-500">{note}</div>}
     </div>
   );
@@ -365,23 +526,6 @@ export function FeedbackBar({ module, subject = '' }) {
   );
 }
 
-/* ─── Lightweight inline markdown-ish renderer for chat answers ────────────── */
-function ChatText({ text }) {
-  const lines = (text || '').split('\n');
-  return (
-    <div className="text-[12px] leading-relaxed text-slate-200 space-y-1">
-      {lines.map((line, i) => {
-        if (!line.trim()) return null;
-        if (/^#{1,3}\s/.test(line)) return <p key={i} className="font-bold text-white">{line.replace(/^#{1,3}\s/, '')}</p>;
-        if (/^\s*[-*•]\s/.test(line)) return <p key={i} className="pl-3">· {line.replace(/^\s*[-*•]\s/, '')}</p>;
-        const parts = line.split(/(\*\*[^*]+\*\*)/g);
-        return <p key={i}>{parts.map((p, j) => p.startsWith('**') && p.endsWith('**')
-          ? <strong key={j} className="text-white font-semibold">{p.slice(2, -2)}</strong> : p)}</p>;
-      })}
-    </div>
-  );
-}
-
 /* ─── Per-module chat assistant (prompt-driven, document-aware) ────────────── */
 export function ModuleChat({ module, title = 'Ask the Assistant', docText, docName, suggestions = [], placeholder }) {
   const [messages, setMessages] = useState([]);
@@ -425,7 +569,7 @@ export function ModuleChat({ module, title = 'Ask the Assistant', docText, docNa
             <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
               <div className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold shrink-0 ${m.role === 'user' ? 'bg-slate-700 text-slate-200' : 'bg-gradient-to-br from-sky-500 to-indigo-500 text-white'}`}>{m.role === 'user' ? 'U' : 'AI'}</div>
               <div className={`max-w-[85%] rounded-xl px-3 py-2 ${m.role === 'user' ? 'bg-slate-700/50' : m.error ? 'bg-red-500/10 border border-red-500/30' : 'bg-app-panel border border-app-border'}`}>
-                <ChatText text={m.content} />
+                <RichText text={m.content} />
                 {m.citations?.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {m.citations.map((c, j) => <span key={j} className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">{c}</span>)}
