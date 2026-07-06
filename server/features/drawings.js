@@ -123,9 +123,9 @@ async function extractRows(part, { columns, instruction, legend, pageInfo }) {
 ${colSpecText(columns)}
 ${legendContext(legend)}
 INTERPRETATION RULES:
-- Read every cable tag / equipment tag / device label / compartment label visible ${pageInfo ? `on THIS sheet (${pageInfo})` : 'in this drawing'}.
+- Read everything including cable tag / equipment tag / device label / compartment label visible ${pageInfo ? `on THIS sheet (${pageInfo})` : 'in this drawing'}.
 - A circled number drawn on a cable run is its cable-type reference — map it to the cable legend to fill cable Type / Size columns.
-- For GA plans, read principal dimensions, compartment names and any stated areas; for BOM requests, use the equipment legend and tags.
+- For GA plans, read everything including principal dimensions, compartment names and any stated areas; for BOM requests, use the equipment legend and tags.
 - Skip runs explicitly marked "SPARE". Never fabricate tags or values that are not shown — use "" for anything not legible.
 ${columns.length ? `\nReturn JSON: { "rows": [ { ${columns.map(c => `"${c}": ""`).join(', ')} } ] }` : `\nReturn JSON: { "columns": ["..."], "rows": [ { } ] }`}
 Output ONLY the JSON.`;
