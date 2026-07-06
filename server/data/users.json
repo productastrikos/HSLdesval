@@ -18,5 +18,15 @@
     "department": "Electrical",
     "active": true,
     "createdAt": "2026-06-03T08:00:17.209Z"
+  },
+  {
+    "id": "user-1783316351831",
+    "username": "test.user",
+    "passwordHash": "$2b$10$uAnMJv2X0OhvPqcvI2Ju6ubJijN1YwP1UR4q3s1/8TNy4EgfDECVC",
+    "fullName": "Test User",
+    "role": "user",
+    "department": "Administration",
+    "active": true,
+    "createdAt": "2026-07-06T05:39:11.954Z"
   }
 ]
