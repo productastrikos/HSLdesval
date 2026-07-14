@@ -11,6 +11,8 @@
 // a document is added or removed.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getRepository, getRepositoryDoc } from './aiService';
+
 const DB_NAME = 'hsl_docstore';
 const DB_VERSION = 2;
 const BASE_STORE = 'base';
@@ -195,15 +197,42 @@ export async function getLibraryDoc(id) {
   catch (_) { return null; }
 }
 
-// ── Merged view used by every document picker (user uploads + pre-loaded library)
+// ── Persistent shared repository (server-side) ───────────────────────────────
+// Documents saved to the server repository persist across sessions and are
+// shared by all users. Fetched live so pickers always reflect the server.
+export async function listRepositoryDocs() {
+  try {
+    const { docs = [] } = await getRepository();
+    return docs.map(d => ({
+      id: d.id, name: d.name, type: d.type || 'General Document', mime: d.mime || '',
+      pages: d.pages || 0, textLength: d.textLength || 0, addedAt: d.addedAt,
+      project: d.project || 'Unassigned', discipline: d.discipline || '',
+      uploadedBy: d.uploadedBy || '', source: 'repository',
+    }));
+  } catch (_) { return []; }
+}
+
+// Full repository document (with text) — used by getSelectableDoc's fallback.
+async function getRepositoryDocFull(id) {
+  try {
+    const d = await getRepositoryDoc(id);
+    return d && d.id ? { ...d, source: 'repository' } : null;
+  } catch (_) { return null; }
+}
+
+// ── Merged view used by every document picker ────────────────────────────────
+// user uploads (this session) + pre-loaded library + persistent shared repository.
+// De-duplicated by id (a repository doc added to the session store appears once).
 export async function listSelectableDocs() {
-  const [user, lib] = await Promise.all([listUserDocs(), listLibraryDocs()]);
+  const [user, lib, repo] = await Promise.all([listUserDocs(), listLibraryDocs(), listRepositoryDocs()]);
   const userTagged = user.map(d => ({ ...d, source: 'user' }));
-  return [...userTagged, ...lib];
+  const seen = new Set(userTagged.map(d => d.id).concat(lib.map(d => d.id)));
+  const repoOnly = repo.filter(d => !seen.has(d.id));
+  return [...userTagged, ...lib, ...repoOnly];
 }
 
 export async function getSelectableDoc(id) {
-  return (await getUserDoc(id)) || (await getLibraryDoc(id));
+  return (await getUserDoc(id)) || (await getLibraryDoc(id)) || (await getRepositoryDocFull(id));
 }
 
 // ── Saved artifacts (edited BOM / SOTR etc.) ────────────────────────────────

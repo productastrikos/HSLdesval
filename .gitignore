@@ -25,4 +25,7 @@ server/data/feedback.json
 server/data/audit.json
 server/data/interactions.json
 
+# Persistent shared document repository — user-uploaded content; never commit.
+server/data/repository/
+
 

@@ -1,6 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { Page, Card, StatTile, RunButton, ErrorNote, ResultTable, MultiDocSource, EditableColumns, Field, Spinner, FeedbackBar, ModuleChat } from '../components/feature/FeatureKit';
 import { docworkerExtract, docworkerEdit, extractText, downloadWord, downloadPdf, logInteraction } from '../services/featureApi';
+import { convertFile, convertBatch } from '../services/aiService';
+
+const CONVERT_FORMATS = [
+  { id: 'XLSX', label: 'Excel (.xlsx)' },
+  { id: 'CSV',  label: 'CSV (.csv)' },
+  { id: 'ODS',  label: 'OpenDocument Sheet (.ods)' },
+  { id: 'TXT',  label: 'Text (.txt)' },
+  { id: 'DOCX', label: 'Word (.doc)' },
+  { id: 'ODT',  label: 'OpenDocument Text (.odt)' },
+];
 
 const PRESETS = {
   'Ship Specifications': {
@@ -51,6 +61,14 @@ export default function Converter() {
   const [editErr, setEditErr]   = useState(null);
   const [edited, setEdited]     = useState(null);
   const [dlBusy, setDlBusy]     = useState(false);
+
+  // Convert-format mode (operates on the raw file bytes, not extracted text)
+  const [cvFiles,  setCvFiles]  = useState([]);       // File[]
+  const [cvFormat, setCvFormat] = useState('XLSX');
+  const [cvBusy,   setCvBusy]   = useState(false);
+  const [cvErr,    setCvErr]    = useState(null);
+  const [cvMsg,    setCvMsg]    = useState(null);
+  const cvFileRef = useRef(null);
 
   const sources = [...docs.map(d => ({ name: d.name, text: d.text })), ...uploads];
 
@@ -122,9 +140,33 @@ export default function Converter() {
     setDlBusy(false);
   };
 
+  // ── Convert file format (single or batch → ZIP) ──────────────────────────────
+  const onPickConvert = (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length) { setCvFiles(prev => [...prev, ...files]); setCvMsg(null); setCvErr(null); }
+  };
+  const runConvert = async () => {
+    if (!cvFiles.length) { setCvErr('Add at least one file to convert.'); return; }
+    setCvBusy(true); setCvErr(null); setCvMsg(null);
+    try {
+      if (cvFiles.length === 1) {
+        await convertFile(cvFiles[0], cvFormat);
+        setCvMsg(`Converted “${cvFiles[0].name}” to ${cvFormat}. Your download has started.`);
+      } else {
+        const r = await convertBatch(cvFiles, cvFormat);
+        setCvMsg(`Converted ${r.converted ?? cvFiles.length} file(s) to ${cvFormat} — a ZIP has been downloaded${r.failed ? ` · ${r.failed} file(s) could not be read (see _errors.txt)` : ''}.`);
+      }
+      logInteraction({ module: 'Document Converter', prompt: `Convert ${cvFiles.length} file(s) → ${cvFormat}`,
+        subject: cvFiles.map(f => f.name).join(', '), response: `Format conversion to ${cvFormat}.` }).catch(() => {});
+    } catch (e) { setCvErr(e.message); }
+    setCvBusy(false);
+  };
+
   const TABS = [
     { id: 'extract', label: 'Extract to table', desc: 'Prompt → custom columns → table' },
     { id: 'edit',    label: 'Rewrite / Summarize', desc: 'Reformat, summarise, translate' },
+    { id: 'convert', label: 'Convert file format', desc: 'PDF/DOCX/image → Excel/Word/Text · batch → ZIP' },
   ];
 
   return (
@@ -132,7 +174,7 @@ export default function Converter() {
       title="Intelligent Document Converter"
       subtitle="Select or upload one or many documents, then either extract structured data into your own columns (consolidating across documents) or rewrite/summarise/translate a document. Fully prompt-driven — export to Excel, Word or PDF."
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         {TABS.map(t => {
           const active = mode === t.id;
           return (
@@ -145,6 +187,7 @@ export default function Converter() {
         })}
       </div>
 
+      {mode !== 'convert' && (
       <Card title="1 · Documents" desc="Select uploaded documents (Select-all supported) and/or upload files here. Extraction consolidates across all selected documents.">
         <MultiDocSource label="Source documents" values={docs} onChange={(v) => { setDocs(v); setResult(null); setEdited(null); }} />
         <div>
@@ -166,8 +209,9 @@ export default function Converter() {
           </div>
         )}
       </Card>
+      )}
 
-      {mode === 'extract' ? (
+      {mode === 'extract' && (
         <>
           <Card title="2 · Extraction Request" desc="Choose a preset or write a custom prompt, and edit the output columns before extracting.">
             <div>
@@ -207,7 +251,9 @@ export default function Converter() {
             </Card>
           )}
         </>
-      ) : (
+      )}
+
+      {mode === 'edit' && (
         <>
           <Card title="2 · Rewrite / Summarize" desc="Operates on the first selected/uploaded document. Describe the change to make.">
             <Field label="Instruction (what to change)" value={instruction} onChange={setInstruction} textarea rows={4}
@@ -237,6 +283,55 @@ export default function Converter() {
             </Card>
           )}
         </>
+      )}
+
+      {mode === 'convert' && (
+        <Card title="Convert file format" desc="Convert one or many files (PDF, DOCX, scanned images, CSV, CAD) into a target format. One file downloads directly; multiple files download together as a ZIP. Scanned/graphical PDFs are read with OCR before conversion.">
+          <div>
+            <input ref={cvFileRef} type="file" multiple accept={ACCEPT} className="hidden" onChange={onPickConvert} />
+            <button onClick={() => cvFileRef.current?.click()} disabled={cvBusy}
+              className="w-full flex items-center justify-center gap-2 px-3 py-3 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors disabled:opacity-40">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+              Add file(s) to convert
+            </button>
+          </div>
+
+          {cvFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {cvFiles.map((f, i) => (
+                <span key={i} className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">
+                  {f.name} <span className="text-slate-500">· {(f.size / 1024 / 1024).toFixed(1)}MB</span>
+                  <button onClick={() => setCvFiles(fs => fs.filter((_, j) => j !== i))} className="text-slate-500 hover:text-red-300">×</button>
+                </span>
+              ))}
+              <button onClick={() => setCvFiles([])} className="text-[10px] px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 hover:text-red-300">Clear all</button>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label className="text-[11px] font-semibold text-slate-300 block mb-1">Convert to</label>
+              <select value={cvFormat} onChange={e => setCvFormat(e.target.value)}
+                className="text-[12px] px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-200">
+                {CONVERT_FORMATS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}
+              </select>
+            </div>
+            <RunButton onClick={runConvert} busy={cvBusy} busyLabel={cvFiles.length > 1 ? 'Converting batch…' : 'Converting…'}>
+              {cvFiles.length > 1 ? `Convert ${cvFiles.length} files → ZIP` : 'Convert & Download'}
+            </RunButton>
+          </div>
+
+          {['XLSX', 'CSV', 'ODS'].includes(cvFormat) && (
+            <p className="text-[10px] text-slate-500">Structured formats (Excel / CSV / ODS) organise each document into the matching official register (equipment / inspection-remarks) — one row per item. Text formats (TXT / Word / ODT) keep the full document content.</p>
+          )}
+          <ErrorNote>{cvErr}</ErrorNote>
+          {cvMsg && (
+            <div className="flex items-start gap-2 bg-emerald-500/[0.08] border border-emerald-500/30 rounded-lg px-3 py-2 text-[11px] text-emerald-300">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              {cvMsg}
+            </div>
+          )}
+        </Card>
       )}
 
       <ModuleChat

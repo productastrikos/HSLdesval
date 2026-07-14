@@ -22,7 +22,6 @@ export default function Workspace() {
   const [docs, setDocs]   = useState([]);
   const [query, setQuery] = useState('');
   const [openProjects, setOpenProjects] = useState({});
-  const [viewer, setViewer] = useState(null);   // { name, text }
   const [error, setError] = useState(null);
 
   // inline uploader
@@ -50,9 +49,18 @@ export default function Workspace() {
 
   const toggle = (p) => setOpenProjects(s => ({ ...s, [p]: !s[p] }));
 
-  const onView = async (id) => {
+  // Open the original uploaded file in a new tab. PDFs/images render inline; other
+  // types (DOCX, DWG/DXF, …) download.
+  const onOpen = async (id) => {
     const d = await getUserDoc(id);
-    if (d) setViewer({ name: d.name, text: d.text || '(no extractable text)' });
+    if (!d) return;
+    if (!(d.file instanceof Blob)) {
+      window.alert('The original file for this document is not available to open.');
+      return;
+    }
+    const url = URL.createObjectURL(d.file);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   };
   const onMove = async (id, field, value) => { await setDocMeta(id, { [field]: value }); };
   const onDelete = async (d) => {
@@ -154,8 +162,8 @@ export default function Workspace() {
                                   className="text-[10px] px-1.5 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300">
                                   {DISCIPLINES.map(x => <option key={x} value={x}>{x || 'General'}</option>)}
                                 </select>
-                                <button onClick={() => onView(d.id)} title="View text" className="p-1 rounded text-slate-500 hover:text-sky-300 hover:bg-sky-500/10">
-                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                <button onClick={() => onOpen(d.id)} title="Open document" className="p-1 rounded text-slate-500 hover:text-emerald-300 hover:bg-emerald-500/10">
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                                 </button>
                                 <button onClick={() => onDelete(d)} title="Remove" className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10">
                                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -173,16 +181,6 @@ export default function Workspace() {
           </div>
         )}
       </Card>
-
-      {viewer && (
-        <Card title={`Document · ${viewer.name}`} right={
-          <button onClick={() => setViewer(null)} className="text-[11px] px-2 py-1 rounded bg-slate-700/40 text-slate-300 border border-slate-600 hover:bg-slate-700/70">Close</button>
-        }>
-          <div className="max-h-[55vh] overflow-y-auto rounded-lg bg-slate-950/40 border border-app-border p-4 text-[12px] text-slate-300 whitespace-pre-wrap leading-relaxed">
-            {viewer.text}
-          </div>
-        </Card>
-      )}
     </Page>
   );
 }

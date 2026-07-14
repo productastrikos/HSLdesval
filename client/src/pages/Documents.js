@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { uploadDocument, validate } from '../services/aiService';
-import { listUserDocs, getUserDoc, addUserDoc, removeUserDoc, listProjects } from '../services/docStore';
+import { uploadDocument, validate, saveToRepository, deleteRepositoryDoc } from '../services/aiService';
+import { listUserDocs, getUserDoc, addUserDoc, removeUserDoc, listProjects, listRepositoryDocs } from '../services/docStore';
 
 const DISCIPLINES = ['', 'Electrical', 'Machinery', 'Hull', 'Outfit', 'Piping', 'HVAC', 'Production', 'QA', 'Planning', 'General'];
 
@@ -50,8 +50,32 @@ function UploadCard({ onAdded, projects = [] }) {
   const [detected, setDetected] = useState(null);
   const [project,    setProject]    = useState('Unassigned');
   const [discipline, setDiscipline] = useState('');
+  const [toRepo,     setToRepo]     = useState(false);   // also persist to shared repository
   const [batch,      setBatch]      = useState(null);   // { done, total, errors }
   const fileRef = useRef(null);
+
+  // One upload — routed either to the per-session store (default) or the
+  // persistent shared repository. In both cases the extracted text is also added
+  // to the in-session picker so the document is usable immediately.
+  const processOne = async (file) => {
+    const cleanProject = (project || 'Unassigned').trim() || 'Unassigned';
+    const result = toRepo
+      ? await saveToRepository(file, { project: cleanProject, discipline })
+      : await uploadDocument(file);
+    await addUserDoc({
+      id:         result.docId || result.id,
+      name:       result.name,
+      type:       result.type,
+      mime:       result.mime || file.type,
+      pages:      result.pages,
+      textLength: result.textLength,
+      text:       result.text,
+      file,                       // keep original for vision features (drawings)
+      project:    cleanProject,
+      discipline,
+    });
+    return result;
+  };
 
   const start = async (file) => {
     setFileInfo({ name: file.name, size: file.size });
@@ -59,20 +83,8 @@ function UploadCard({ onAdded, projects = [] }) {
     try {
       setStage('reading'); setProgress(25);
       setStage('ocr'); setProgress(55);
-      const result = await uploadDocument(file);
+      const result = await processOne(file);
       setStage('indexing'); setProgress(85);
-      await addUserDoc({
-        id:         result.docId,
-        name:       result.name,
-        type:       result.type,
-        mime:       result.mime || file.type,
-        pages:      result.pages,
-        textLength: result.textLength,
-        text:       result.text,
-        file,                       // keep original for vision features (drawings)
-        project:    (project || 'Unassigned').trim() || 'Unassigned',
-        discipline,
-      });
       setDetected(result.type);
       setStage('done'); setProgress(100);
       onAdded && onAdded();
@@ -88,15 +100,7 @@ function UploadCard({ onAdded, projects = [] }) {
     setBatch({ done: 0, total: files.length, errors: 0 });
     let errors = 0;
     for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      try {
-        const result = await uploadDocument(file);
-        await addUserDoc({
-          id: result.docId, name: result.name, type: result.type, mime: result.mime || file.type,
-          pages: result.pages, textLength: result.textLength, text: result.text, file,
-          project: (project || 'Unassigned').trim() || 'Unassigned', discipline,
-        });
-      } catch (_) { errors++; }
+      try { await processOne(files[i]); } catch (_) { errors++; }
       setBatch({ done: i + 1, total: files.length, errors });
       onAdded && onAdded();
     }
@@ -141,7 +145,7 @@ function UploadCard({ onAdded, projects = [] }) {
           <button onClick={() => fileRef.current?.click()} className="w-full flex flex-col items-center gap-2 text-slate-400 hover:text-sky-300 transition-colors">
             <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
             <span className="text-sm font-semibold">{stageLabel}</span>
-            <span className="text-[11px] text-slate-500">The document type is detected automatically · PDF · DOCX · scanned images · CSV · up to 200 MB</span>
+            <span className="text-[11px] text-slate-500">The document type is detected automatically · PDF · DOCX · scanned images · CSV · no per-file size limit on this server</span>
           </button>
           <div className="grid sm:grid-cols-2 gap-2 pt-1 border-t border-app-border/60">
             <div>
@@ -158,6 +162,13 @@ function UploadCard({ onAdded, projects = [] }) {
               </select>
             </div>
           </div>
+          <label className="flex items-start gap-2 pt-1 cursor-pointer select-none">
+            <input type="checkbox" checked={toRepo} onChange={e => setToRepo(e.target.checked)}
+              className="mt-0.5 accent-emerald-500" />
+            <span className="text-[10px] text-slate-400 leading-snug">
+              <span className="font-semibold text-emerald-300">Save to shared repository</span> — persists on the server across sessions (survives sign-out) and is available to all users. Leave unchecked to keep the document only for this session.
+            </span>
+          </label>
           <p className="text-[10px] text-slate-500 text-center">Uploads are filed under the chosen project &amp; discipline in your hierarchical Workspace.</p>
         </div>
       )}
@@ -221,13 +232,27 @@ export default function Documents() {
   const [query,      setQuery]     = useState('');
   const [deletingId, setDeletingId] = useState(null);
 
+  // ─ Persistent shared repository (server-held) ───────────────────────────────
+  const [repoDocs,     setRepoDocs]     = useState([]);
+  const [repoDeleting,  setRepoDeleting] = useState(null);
+
   const refreshDocs = useCallback(() => { listUserDocs().then(setDocs).catch(() => setDocs([])); }, []);
+  const refreshRepo = useCallback(() => { listRepositoryDocs().then(setRepoDocs).catch(() => setRepoDocs([])); }, []);
+  const refreshAll  = useCallback(() => { refreshDocs(); refreshRepo(); }, [refreshDocs, refreshRepo]);
 
   useEffect(() => {
     refreshDocs();
+    refreshRepo();
     window.addEventListener('docstore:changed', refreshDocs);
     return () => window.removeEventListener('docstore:changed', refreshDocs);
-  }, [refreshDocs]);
+  }, [refreshDocs, refreshRepo]);
+
+  const handleRepoDelete = useCallback(async (doc) => {
+    if (!window.confirm(`Permanently remove "${doc.name}" from the shared repository? This affects all users.`)) return;
+    setRepoDeleting(doc.id);
+    try { await deleteRepositoryDoc(doc.id); await refreshRepo(); } catch (e) { alert(e.message); }
+    setRepoDeleting(null);
+  }, [refreshRepo]);
 
   const handleDelete = useCallback(async (doc) => {
     if (!window.confirm(`Remove "${doc.name}" from your workspace?`)) return;
@@ -326,7 +351,10 @@ export default function Documents() {
       </div>
 
       <div className="flex gap-1 bg-app-panel border border-app-border rounded-xl p-1 w-fit">
-        <button className={tabCls('documents')} onClick={() => setActiveTab('documents')}>Documents</button>
+        <button className={tabCls('documents')} onClick={() => setActiveTab('documents')}>My Documents</button>
+        <button className={tabCls('repository')} onClick={() => setActiveTab('repository')}>
+          Shared Repository{repoDocs.length ? ` · ${repoDocs.length}` : ''}
+        </button>
         <button className={tabCls('validator')} onClick={() => setActiveTab('validator')}>Rule Validator</button>
       </div>
 
@@ -350,7 +378,7 @@ export default function Documents() {
 
           <div className="space-y-3">
             <div className="space-y-3">
-              <UploadCard onAdded={refreshDocs} projects={Array.from(new Set(docs.map(d => d.project || 'Unassigned')))} />
+              <UploadCard onAdded={refreshAll} projects={Array.from(new Set([...docs, ...repoDocs].map(d => d.project || 'Unassigned')))} />
 
               <div className="bg-app-panel border border-app-border rounded-xl overflow-hidden">
                 <div className="px-4 py-3 border-b border-app-border flex items-center gap-3 flex-wrap">
@@ -426,6 +454,92 @@ export default function Documents() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── SHARED REPOSITORY TAB ───────────────────────────────────────────── */}
+      {activeTab === 'repository' && (
+        <div className="space-y-3">
+          <div className="bg-emerald-500/[0.06] border border-emerald-500/25 rounded-xl px-4 py-3">
+            <div className="text-sm font-bold text-emerald-300">Persistent Shared Repository</div>
+            <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+              Documents saved here live on the server — they <span className="text-slate-200 font-semibold">persist across sessions</span> (they are not cleared when you sign out), are <span className="text-slate-200 font-semibold">shared with every user</span>, and have <span className="text-slate-200 font-semibold">no count or size limit</span>. Tick “Save to shared repository” in the upload box (My Documents tab) to add documents here. They are available in every tool’s document picker.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              { label:'In Repository', value: repoDocs.length,                                        color:'text-emerald-400', sub:'documents (all users)' },
+              { label:'Projects',      value: new Set(repoDocs.map(d => d.project || 'Unassigned')).size, color:'text-sky-400',     sub:'workspaces' },
+              { label:'Total Pages',   value: repoDocs.reduce((s, d) => s + (d.pages || 0), 0).toLocaleString(), color:'text-amber-400', sub:'extracted' },
+            ].map(({ label, value, color, sub }) => (
+              <div key={label} className="bg-app-panel border border-app-border rounded-xl p-4">
+                <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">{label}</div>
+                <div className={`text-2xl font-bold ${color} mt-1`}>{value}</div>
+                <div className="text-[10px] text-slate-500">{sub}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-app-panel border border-app-border rounded-xl overflow-hidden">
+            <div className="px-4 py-3 border-b border-app-border flex items-center gap-3">
+              <h3 className="text-sm font-bold text-white">Repository Documents</h3>
+              <button onClick={refreshRepo} className="text-[10px] px-2 py-1 rounded bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700">Refresh</button>
+            </div>
+            <div className="max-h-[480px] overflow-y-auto">
+              <table className="w-full text-[11px]">
+                <thead className="text-[9px] uppercase tracking-widest text-slate-500 bg-white/[0.02]">
+                  <tr>
+                    <th className="text-left px-3 py-2 font-bold">Document</th>
+                    <th className="text-left px-3 py-2 font-bold">Type</th>
+                    <th className="text-left px-3 py-2 font-bold">Project</th>
+                    <th className="text-left px-3 py-2 font-bold">Uploaded By</th>
+                    <th className="text-right px-3 py-2 font-bold">Pages</th>
+                    <th className="text-left px-3 py-2 font-bold">Added</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  {repoDocs.map(d => (
+                    <tr key={d.id} className="hover:bg-white/[0.02]">
+                      <td className="px-3 py-2">
+                        <div className="text-slate-200 font-semibold leading-tight">{d.name}</div>
+                        <div className="font-mono text-[9px] text-slate-600">{Math.round((d.textLength || 0) / 1000)}k chars</div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-widest ${TYPE_COLOR[d.type] || 'bg-slate-700 text-slate-300 border-slate-600'}`}>{d.type}</span>
+                      </td>
+                      <td className="px-3 py-2 text-slate-400">{d.project || 'Unassigned'}</td>
+                      <td className="px-3 py-2 text-slate-400">{d.uploadedBy || '—'}</td>
+                      <td className="text-right px-3 py-2 text-slate-300 font-mono">{d.pages || '—'}</td>
+                      <td className="px-3 py-2 text-slate-500">{d.addedAt ? new Date(d.addedAt).toLocaleDateString() : '—'}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          onClick={() => handleRepoDelete(d)}
+                          disabled={repoDeleting === d.id}
+                          title="Remove from shared repository"
+                          className="p-1 rounded text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                        >
+                          {repoDeleting === d.id ? (
+                            <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                          ) : (
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {repoDocs.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-8 text-center text-slate-500 text-[11px]">
+                        The shared repository is empty. Upload a document with “Save to shared repository” ticked to add one.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── RULE VALIDATOR TAB ──────────────────────────────────────────────── */}

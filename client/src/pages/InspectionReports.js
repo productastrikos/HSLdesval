@@ -291,11 +291,13 @@ export default function InspectionReports() {
       {tab === 'query' && (
         <Card title="Query Inspection Data" desc="Ask questions in plain language across all analysed inspection observations — counts, lists and filters. Answers are grounded strictly in your recorded data.">
           <div className="flex items-end gap-2">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <Field label="Question" value={question} onChange={setQuestion}
                 placeholder="e.g. How many UNSAT remarks were raised by WATT in Project XXX?" />
             </div>
-            <RunButton onClick={() => askQuestion()} busy={qBusy} busyLabel="Searching…">Ask</RunButton>
+            <div className="shrink-0 w-32">
+              <RunButton onClick={() => askQuestion()} busy={qBusy} busyLabel="Searching…">Ask</RunButton>
+            </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {[

@@ -40,97 +40,13 @@ const { isRendererAvailable }      = require('./lib/rasterize');
 const { buildWorkbook }            = require('./lib/excel');
 const { buildWordDoc, buildWordTable, buildWordFromText } = require('./lib/word');
 const { buildPdfDoc, buildPdfTable, buildPdfFromText }    = require('./lib/pdf');
+const { toCsvBuffer }              = require('./lib/csv');
+const { buildOds, buildOdt }       = require('./lib/odf');
 const { getFeedbackGuidance }      = require('./features/feedback');
+const { classifyDocType }          = require('./lib/classify');
+const JSZip                        = require('jszip');
 
-// ── Automatic document-type classification ────────────────────────────────────
-// The upload page never asks the user what kind of document they are uploading;
-// we infer it from the content. Heuristics first (fast, deterministic), with an
-// inference fallback for anything ambiguous.
-const DOC_TYPES = [
-  'SOTR', 'POTS', 'Technical Offer', 'Binding Data', 'Compliance Matrix',
-  'Inspection Report', 'Drawing', 'Build Specification', 'RFP / Tender', 'General Document',
-];
-
-// Weighted signals per category. Strong, specific phrases score high; generic
-// single words score low (so an incidental mention doesn't force a label).
-// A signal that appears in the FILENAME counts double — filenames are the most
-// reliable indicator (e.g. "EED-56-02 SOTR DGPS.pdf", "11190-91_POTS_SPT.pdf").
-const DOCTYPE_SIGNALS = [
-  ['POTS',                [[/\bpots\b/, 5], [/purchase order technical spec/, 5]]],
-  ['SOTR',                [[/\bsotr\b/, 5], [/statement of technical requirement/, 5], [/schedule of technical requirement/, 5], [/tender technical specification/, 4], [/\btts\b/, 3], [/technical requirements for\b/, 2]]],
-  ['Compliance Matrix',   [[/compliance matrix/, 5], [/technical[_ ]compliance/, 4], [/compliance statement/, 4], [/deviation statement/, 4], [/comply\s*\/\s*not[\s-]?comply/, 5], [/\(\s*comply\b/, 3], [/clause[- ]?by[- ]?clause/, 3]]],
-  ['Technical Offer',     [[/technical offer/, 5], [/technical bid/, 4], [/vendor offer/, 4], [/bid offer/, 4], [/budgetary (quotation|offer|quote)/, 3], [/\bquotation\b/, 1]]],
-  ['Binding Data',        [[/binding data/, 5], [/\bbdd\b/, 4], [/guaranteed (technical )?(data|particulars)/, 4], [/technical particulars/, 2], [/\bdata[\s_]?sheet\b/, 2]]],
-  ['Inspection Report',   [[/inspection report/, 5], [/non[- ]?conformit/, 3], [/\bncr\b/, 3], [/(harbour|sea) acceptance trial/, 4], [/trial report/, 3], [/snag list/, 3], [/punch list/, 3], [/\bobservation/, 1]]],
-  ['Drawing',             [[/single line diagram/, 5], [/\bsld\b/, 4], [/cable schedule/, 4], [/general arrangement/, 4], [/\bp&id\b/, 4], [/interconnection diagram/, 4], [/\bga plan\b/, 3], [/drawing no\.?|drg\.? no\.?/, 2]]],
-  ['Build Specification', [[/build(ing)? specification/, 5], [/build spec\b/, 4]]],
-  ['RFP / Tender',        [[/request for proposal/, 5], [/invitation to bid/, 4], [/\brfp\b/, 4], [/tender enquiry/, 4], [/\bnit\b/, 3], [/\btender\b/, 2]]],
-];
-
-function heuristicDocType(text, name = '') {
-  const rawName = (name || '').toLowerCase();
-
-  // File extension is the strongest possible signal for CAD drawings.
-  if (/\.(dwg|dxf)$/i.test(rawName)) return 'Drawing';
-
-  // Normalise separators → spaces so \b word boundaries work. Underscores and
-  // dots are WORD characters in regex, so "_POTS_" / "SOTR_HDCS" would otherwise
-  // never match \bpots\b / \bsotr\b — the main cause of misclassified uploads.
-  const fname = rawName.replace(/[_\-./\\]+/g, ' ');
-  const body  = (text || '').slice(0, 6000).toLowerCase().replace(/_+/g, ' ');
-
-  let best = null, bestScore = 0;
-  for (const [type, pats] of DOCTYPE_SIGNALS) {
-    let score = 0;
-    for (const [re, w] of pats) {
-      if (re.test(fname))      score += w * 2;   // filename match — most reliable
-      else if (re.test(body))  score += w;
-    }
-    if (score > bestScore) { bestScore = score; best = type; }
-  }
-  // Only trust the heuristic when reasonably confident; otherwise defer to the LLM.
-  return bestScore >= 4 ? best : null;
-}
-
-// One-line descriptions to ground the LLM classifier when heuristics are unsure.
-const DOC_TYPE_HINTS = {
-  'SOTR': 'Statement of Technical Requirements / Tender Technical Specification — what the buyer requires.',
-  'POTS': 'Purchase Order Technical Specification — technical terms attached to a purchase order.',
-  'Technical Offer': "A vendor's technical proposal / bid / quotation in response to an enquiry.",
-  'Binding Data': 'Vendor binding data — guaranteed particulars, datasheets, certificates, manuals submitted for approval.',
-  'Compliance Matrix': 'A clause-by-clause compliance / deviation statement comparing requirements to an offer.',
-  'Inspection Report': 'Inspection / trial report listing observations, non-conformities (NCRs), SAT/UNSAT results.',
-  'Drawing': 'Engineering drawing — SLD, schematic, GA plan, P&ID, cable block diagram (PDF/image/CAD).',
-  'Build Specification': 'The shipbuilding/build specification describing the vessel and its systems.',
-  'RFP / Tender': 'Request for Proposal / tender / invitation to bid inviting offers.',
-  'General Document': 'Anything that does not clearly fit the above (manuals, standards, notes, correspondence).',
-};
-
-async function classifyDocType(text, name = '') {
-  const h = heuristicDocType(text, name);
-  if (h) return h;
-  try {
-    const prompt = `You classify shipyard engineering documents. Choose EXACTLY ONE category that best describes the document below, based on its overall purpose (not an incidental keyword).
-
-Categories:
-${DOC_TYPES.map(t => `- ${t}: ${DOC_TYPE_HINTS[t] || ''}`).join('\n')}
-
-Reply with ONLY the exact category name.
-
-Document file name: ${name || '(unknown)'}
-Document excerpt:
-${text.slice(0, 4000)}`;
-    const out = (await generateText(prompt, { temperature: 0, maxOutputTokens: 24 })).trim();
-    // Prefer an exact category match; fall back to a contained match.
-    const exact = DOC_TYPES.find(t => out.toLowerCase() === t.toLowerCase());
-    const match = exact || DOC_TYPES.find(t => out.toLowerCase().includes(t.toLowerCase()));
-    return match || 'General Document';
-  } catch (_) {
-    return 'General Document';
-  }
-}
-
-const { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES } = require('./lib/limits');
+const { MAX_UPLOAD_MB, MAX_UPLOAD_BYTES, MAX_UPLOAD_LABEL } = require('./lib/limits');
 
 const app    = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
@@ -142,7 +58,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use(audit.auditMiddleware);
 
 // ── Boot: initialise knowledge base (async, non-blocking) ─────────────────────
+// After the built-in KB loads, re-index any admin-managed rule books (their
+// active versions) so version-controlled documents survive restarts.
 rag.initializeKnowledgeBase()
+  .then(() => require('./features/rulebooks').reindexAll())
   .catch(err => console.error('[RAG] KB init error:', err.message));
 
 
@@ -241,6 +160,8 @@ app.get('/api/health', (req, res) => {
     nodeVersion:  process.versions.node,
     aiConfigured: !!process.env.LLM_API_KEY,   // text + vision both need this
     ocrAvailable: isRendererAvailable(),       // scanned-PDF OCR needs the WASM renderer
+    maxUploadMb:    MAX_UPLOAD_MB,             // 0 = unlimited
+    maxUploadLabel: MAX_UPLOAD_LABEL,          // "Unlimited" or "1024 MB"
     ...rag.getStatus(),
   });
 });
@@ -702,60 +623,135 @@ ${text.slice(0, 12000)}`;
   return rows.filter(r => r && typeof r === 'object');
 }
 
+// Extract the document into the matching official register (equipment / inspection
+// remarks), AI-filling its exact columns. Falls back to a header-only register if
+// the AI is unavailable, so a structured file is always produced. Shared by the
+// XLSX / CSV / ODS branches.
+async function extractRegister(text, origName) {
+  const template = pickXlsxTemplate(text, origName);
+  let rows = [];
+  try {
+    rows = await extractTemplateRows(template, text, origName);
+  } catch (err) {
+    console.warn(`[convertOne] ${template.sheet} extraction failed — emitting template only:`, err.message);
+  }
+  rows.forEach((r, i) => { r['S.No'] = String(i + 1); });   // renumber serially
+  return { template, rows };
+}
+
+// Convert one file's bytes into the requested format. Returns a descriptor
+// { filename, contentType, body } (body is a Buffer or string). Throws on an
+// unreadable file. Shared by the single- and batch-conversion endpoints.
+// Structured formats (XLSX/CSV/ODS) emit the extracted register; document formats
+// (TXT/DOCX/ODT) emit the full text.
+async function convertOne(buffer, mime, origName, format) {
+  const fmt      = (format || 'TXT').toUpperCase();
+  const baseName = (origName || 'document').replace(/\.[^/.]+$/, '');
+
+  const text = await extractFileText(buffer, mime, origName);
+  if (!text.trim()) {
+    const err = new Error(`Could not extract text from "${origName}". It may be empty, password-protected, or a corrupted/incomplete PDF.`);
+    err.status = 422;
+    throw err;
+  }
+
+  if (fmt === 'XLSX') {
+    const { template, rows } = await extractRegister(text, origName);
+    const buf = await buildWorkbook([{ name: template.sheet, columns: template.columns, rows }]);
+    return { filename: `${baseName}.xlsx`, contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', body: buf };
+  }
+
+  if (fmt === 'CSV') {
+    const { template, rows } = await extractRegister(text, origName);
+    return { filename: `${baseName}.csv`, contentType: 'text/csv; charset=utf-8', body: toCsvBuffer(template.columns, rows) };
+  }
+
+  if (fmt === 'ODS') {
+    const { template, rows } = await extractRegister(text, origName);
+    const buf = await buildOds([{ name: template.sheet, columns: template.columns, rows }]);
+    return { filename: `${baseName}.ods`, contentType: 'application/vnd.oasis.opendocument.spreadsheet', body: buf };
+  }
+
+  // ODT / ODF → a real OpenDocument Text file of the extracted content.
+  if (fmt === 'ODT' || fmt === 'ODF') {
+    const buf = await buildOdt(baseName, text);
+    return { filename: `${baseName}.odt`, contentType: 'application/vnd.oasis.opendocument.text', body: buf };
+  }
+
+  // DOCX: a genuine (HTML-based) Word document of the extracted text.
+  if (fmt === 'DOCX') {
+    return { filename: `${baseName}.doc`, contentType: 'application/msword', body: buildWordFromText(baseName, text) };
+  }
+
+  // TXT (default): plain-text of the extracted content.
+  return { filename: `${baseName}.txt`, contentType: 'text/plain; charset=utf-8', body: text };
+}
+
 app.post('/api/convert', authenticate, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
-
-    const format   = (req.body.format || 'TXT').toUpperCase();
-    const mime     = req.file.mimetype;
-    const origName = req.file.originalname;
-    const baseName = origName.replace(/\.[^/.]+$/, '');
-
-    // ── Extract text ─────────────────────────────────────────────────────────
-    const text = await extractFileText(req.file.buffer, mime, origName);
-
-    if (!text.trim()) {
-      return res.status(422).json({ error: 'Could not extract text from file.' });
-    }
-
-    // ── Produce output ───────────────────────────────────────────────────────
-    if (format === 'XLSX') {
-      // Choose the official template by document type, then AI-extract rows into
-      // its exact columns. If extraction fails (e.g. AI unavailable), still emit
-      // the correctly formatted template (headers only) so the format is guaranteed.
-      const template = pickXlsxTemplate(text, origName);
-      let rows = [];
-      try {
-        rows = await extractTemplateRows(template, text, origName);
-      } catch (err) {
-        console.warn(`[/api/convert] ${template.sheet} extraction failed — emitting template only:`, err.message);
-      }
-      rows.forEach((r, i) => { r['S.No'] = String(i + 1); });   // renumber serially
-
-      const buf = await buildWorkbook([{
-        name:    template.sheet,
-        columns: template.columns,
-        rows,
-      }]);
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.xlsx"`);
-      return res.send(buf);
-    }
-
-    if (format === 'TXT') {
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.txt"`);
-      return res.send(text);
-    }
-
-    // DOCX and ODF: export as plain-text with the requested extension
-    // (full DOCX/ODF generation requires additional libraries not in scope)
-    const ext = format === 'DOCX' ? 'docx' : 'odt';
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${baseName}.${ext}"`);
-    return res.send(text);
+    const out = await convertOne(req.file.buffer, req.file.mimetype, req.file.originalname, req.body.format);
+    res.setHeader('Content-Type', out.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${out.filename}"`);
+    return res.send(out.body);
   } catch (err) {
     console.error('[/api/convert]', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BATCH CONVERT  POST /api/convert-batch
+// Body (multipart): files[] (2+), format (TXT | XLSX | DOCX | ODF)
+// Converts every uploaded file to the target format and returns a single ZIP.
+// Files that cannot be read are skipped and listed in _errors.txt inside the ZIP,
+// so one bad file never sinks the whole batch. (Spec §2p: "support batch
+// conversion".)
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/convert-batch', authenticate, upload.array('files', 200), async (req, res) => {
+  try {
+    const files = req.files || [];
+    if (!files.length) return res.status(400).json({ error: 'No files uploaded.' });
+
+    const format = (req.body.format || 'TXT').toUpperCase();
+    const zip    = new JSZip();
+    const used   = new Set();
+    const errors = [];
+    let converted = 0;
+
+    for (const f of files) {
+      try {
+        const out = await convertOne(f.buffer, f.mimetype, f.originalname, format);
+        // Avoid collisions when two source files share a base name.
+        let name = out.filename;
+        if (used.has(name)) {
+          const dot = name.lastIndexOf('.');
+          name = `${name.slice(0, dot)}_${converted + 1}${name.slice(dot)}`;
+        }
+        used.add(name);
+        zip.file(name, out.body);
+        converted++;
+      } catch (err) {
+        errors.push(`${f.originalname}: ${err.message}`);
+      }
+    }
+
+    if (!converted) {
+      return res.status(422).json({ error: `None of the ${files.length} files could be converted.`, details: errors });
+    }
+    if (errors.length) {
+      zip.file('_errors.txt', `The following files could not be converted:\n\n${errors.join('\n')}\n`);
+    }
+
+    const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="converted_${format.toLowerCase()}_${stamp}.zip"`);
+    res.setHeader('X-Converted-Count', String(converted));
+    res.setHeader('X-Failed-Count', String(errors.length));
+    return res.send(buf);
+  } catch (err) {
+    console.error('[/api/convert-batch]', err.message);
     res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
   }
 });
@@ -974,6 +970,45 @@ app.post('/api/export/pdf', authenticate, async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// EXPORT CSV  POST /api/export/csv
+// Body: { columns:[label], rows:[obj|array], filename? } → RFC-4180 CSV download.
+// Gives every feature table a real CSV export (spec §2n/§2p).
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/export/csv', authenticate, (req, res) => {
+  try {
+    const { columns, rows = [], filename } = req.body || {};
+    if (!Array.isArray(columns) || !columns.length) return res.status(400).json({ error: 'columns[] is required.' });
+    const safe = (filename || 'export').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.csv$/i, '');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}.csv"`);
+    res.send(toCsvBuffer(columns, rows));
+  } catch (err) {
+    console.error('[/api/export/csv]', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXPORT ODS  POST /api/export/ods
+// Body: { sheets:[{ name, columns, rows, title?, meta? }], filename? }
+// Produces a REAL OpenDocument Spreadsheet (.ods) — the ODF analog of Excel.
+// ─────────────────────────────────────────────────────────────────────────────
+app.post('/api/export/ods', authenticate, async (req, res) => {
+  try {
+    const { sheets, filename } = req.body || {};
+    if (!Array.isArray(sheets) || !sheets.length) return res.status(400).json({ error: 'sheets[] is required.' });
+    const buf  = await buildOds(sheets);
+    const safe = (filename || 'export').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.ods$/i, '');
+    res.setHeader('Content-Type', 'application/vnd.oasis.opendocument.spreadsheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${safe}.ods"`);
+    res.send(buf);
+  } catch (err) {
+    console.error('[/api/export/ods]', err.message);
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'An unexpected server error occurred. Please try again.' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Feature modules (all authenticated)
 //   /api/drawings     Extraction of data from drawings (cable schedules, etc.)
 //   /api/inspection   Inspection-report → categorised observations
@@ -995,6 +1030,8 @@ app.use('/api/bom',          authenticate, require('./features/bom'));
 app.use('/api/dashboard',    authenticate, require('./features/dashboard'));
 app.use('/api/cost',         authenticate, require('./features/cost'));
 app.use('/api/library',      authenticate, require('./features/library').router);
+app.use('/api/repository',   authenticate, require('./features/repository'));
+app.use('/api/rulebooks',    authenticate, requireAdmin, require('./features/rulebooks').router);
 app.use('/api/feedback',     authenticate, require('./features/feedback').router);
 app.use('/api/interactions', authenticate, interactions.router);
 app.use('/api/audit',        authenticate, requireAdmin, audit.router);

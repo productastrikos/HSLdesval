@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { downloadXlsx, downloadWord, downloadPdf, sendFeedback } from '../../services/featureApi';
+import { downloadXlsx, downloadWord, downloadPdf, downloadCsv, downloadOds, sendFeedback } from '../../services/featureApi';
 import { chat } from '../../services/aiService';
 import { listSelectableDocs, getSelectableDoc } from '../../services/docStore';
 
@@ -326,10 +326,12 @@ export function RichText({ text }) {
 }
 
 /* ─── Result table with Excel export (+ optional inline editing) ──────────── */
-export function ResultTable({ columns, rows, title, downloadName = 'export', sheetName = 'Sheet1', extraSheets = [], note, enableWord = true, enablePdf = true, editable = false, onRowsChange, onColumnsChange }) {
+export function ResultTable({ columns, rows, title, downloadName = 'export', sheetName = 'Sheet1', extraSheets = [], note, enableWord = true, enablePdf = true, enableCsv = true, enableOds = true, editable = false, onRowsChange, onColumnsChange }) {
   const [busy, setBusy] = useState(false);
   const [wbusy, setWbusy] = useState(false);
   const [pbusy, setPbusy] = useState(false);
+  const [cbusy, setCbusy] = useState(false);
+  const [obusy, setObusy] = useState(false);
   const [err, setErr]   = useState(null);
 
   const editCell = (ri, col, v) => { if (!onRowsChange) return; const next = rows.map((r, i) => i === ri ? { ...r, [col]: v } : r); onRowsChange(next); };
@@ -361,6 +363,22 @@ export function ResultTable({ columns, rows, title, downloadName = 'export', she
     setPbusy(false);
   };
 
+  const onCsv = async () => {
+    setCbusy(true); setErr(null);
+    try {
+      await downloadCsv({ columns, rows, filename: downloadName });
+    } catch (e) { setErr(e.message); }
+    setCbusy(false);
+  };
+
+  const onOds = async () => {
+    setObusy(true); setErr(null);
+    try {
+      await downloadOds([{ name: sheetName, columns, rows, title }, ...extraSheets], downloadName);
+    } catch (e) { setErr(e.message); }
+    setObusy(false);
+  };
+
   if (!columns?.length) return null;
 
   return (
@@ -377,6 +395,28 @@ export function ResultTable({ columns, rows, title, downloadName = 'export', she
             {busy ? <Spinner /> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>}
             Excel
           </button>
+          {enableCsv && (
+            <button
+              onClick={onCsv}
+              disabled={cbusy || !rows.length}
+              title="Download as CSV"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/15 text-teal-300 border border-teal-500/30 text-[11px] font-semibold hover:bg-teal-500/25 transition-colors disabled:opacity-40"
+            >
+              {cbusy ? <Spinner /> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>}
+              CSV
+            </button>
+          )}
+          {enableOds && (
+            <button
+              onClick={onOds}
+              disabled={obusy || !rows.length}
+              title="Download as OpenDocument Spreadsheet (.ods)"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-lime-500/15 text-lime-300 border border-lime-500/30 text-[11px] font-semibold hover:bg-lime-500/25 transition-colors disabled:opacity-40"
+            >
+              {obusy ? <Spinner /> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>}
+              ODS
+            </button>
+          )}
           {enableWord && (
             <button
               onClick={onWord}

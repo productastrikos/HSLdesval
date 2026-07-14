@@ -83,6 +83,44 @@ export async function downloadXlsx(sheets, filename = 'export') {
   return { kb: Math.round(blob.size / 1024) };
 }
 
+// ── Shared: build + download a real CSV ──────────────────────────────────────
+export async function downloadCsv({ columns, rows = [], filename = 'export' }) {
+  const res = await netFetch(`${API_BASE}/export/csv`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ columns, rows, filename }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: `Request failed (HTTP ${res.status}).` }));
+    throw new Error(body.error || `Request failed (HTTP ${res.status}).`);
+  }
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `${filename.replace(/\.csv$/i, '')}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  return { kb: Math.round(blob.size / 1024) };
+}
+
+// ── Shared: build + download a real OpenDocument Spreadsheet (.ods) ───────────
+export async function downloadOds(sheets, filename = 'export') {
+  const res = await netFetch(`${API_BASE}/export/ods`, {
+    method: 'POST',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ sheets, filename }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: `Request failed (HTTP ${res.status}).` }));
+    throw new Error(body.error || `Request failed (HTTP ${res.status}).`);
+  }
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `${filename.replace(/\.ods$/i, '')}.ods`; a.click();
+  URL.revokeObjectURL(url);
+  return { kb: Math.round(blob.size / 1024) };
+}
+
 // ── Shared: build + download a Word (.doc) document ──────────────────────────
 // payload: { title, subtitle, filename } plus ONE of: { text } | { columns, rows } | { blocks }
 export async function downloadWord(payload) {
