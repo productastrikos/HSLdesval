@@ -135,7 +135,7 @@ export default function DrawingExtract() {
           <DocSource label="Pre-loaded / uploaded drawing" value={source} onChange={(v) => { setSource(v); setFile(null); setResult(null); setVResult(null); }} />
           <div className="space-y-2">
             <label className="text-[11px] font-semibold text-slate-300">Or upload a drawing</label>
-            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.dwg,.dxf" className="hidden" onChange={onUpload} />
+            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.dwg,.dxf,application/octet-stream" className="hidden" onChange={onUpload} />
             <button onClick={() => fileRef.current?.click()}
               className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
@@ -188,7 +188,7 @@ export default function DrawingExtract() {
             <DocSource label="Second drawing (pre-loaded / uploaded)" value={sourceB} onChange={(v) => { setSourceB(v); setFileB(null); setCResult(null); }} />
             <div className="space-y-2">
               <label className="text-[11px] font-semibold text-slate-300">Or upload the second drawing</label>
-              <input ref={fileRefB} type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.dwg,.dxf" className="hidden"
+              <input ref={fileRefB} type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.dwg,.dxf,application/octet-stream" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) { setFileB(f); setSourceB(null); setCResult(null); } }} />
               <button onClick={() => fileRefB.current?.click()}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors">

@@ -216,18 +216,39 @@ function buildPdfTable(title, columns, rows, subtitle = '') {
   return buildPdfDoc({ title, subtitle, blocks: [{ type: 'table', columns, rows }] });
 }
 
-// Convert lightweight markdown-ish prose into PDF blocks (same grammar as Word).
+// ── Markdown pipe-table detection (shared grammar with lib/word.js) ───────────
+const isTableRow = l => /^\s*\|.*\|\s*$/.test(l);
+const isTableSep = l => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(l);
+const splitTableRow = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|')
+  .map(c => c.replace(/\*\*(.+?)\*\*/g, '$1').trim());
+
+// Convert lightweight markdown-ish prose into PDF blocks (same grammar as Word):
+// # / ## / ### headings, "- " bullets, | pipe | tables, and paragraphs.
 function buildPdfFromText(title, text, subtitle = '') {
   const blocks = [];
   const lines = String(text || '').split(/\r?\n/);
   let bullets = [];
   const flush = () => { if (bullets.length) { blocks.push({ type: 'bullet', items: bullets }); bullets = []; } };
 
-  for (const raw of lines) {
-    const line = raw.replace(/\*\*(.+?)\*\*/g, '$1');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].replace(/\*\*(.+?)\*\*/g, '$1');
+
+    if (isTableRow(line) && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+      flush();
+      const columns = splitTableRow(line);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && isTableRow(lines[i]) && !isTableSep(lines[i])) {
+        rows.push(splitTableRow(lines[i])); i++;
+      }
+      i--;
+      blocks.push({ type: 'table', columns, rows });
+      continue;
+    }
+
     if (/^###\s+/.test(line))           { flush(); blocks.push({ type: 'heading', level: 3, text: line.replace(/^###\s+/, '') }); }
     else if (/^##\s+/.test(line))       { flush(); blocks.push({ type: 'heading', level: 2, text: line.replace(/^##\s+/, '') }); }
-    else if (/^#\s+/.test(line))        { flush(); blocks.push({ type: 'heading', level: 2, text: line.replace(/^#\s+/, '') }); }
+    else if (/^#\s+/.test(line))        { flush(); blocks.push({ type: 'heading', level: 1, text: line.replace(/^#\s+/, '') }); }
     else if (/^\s*[-*•]\s+/.test(line)) { bullets.push(line.replace(/^\s*[-*•]\s+/, '')); }
     else if (line.trim() === '')        { flush(); }
     else                                { flush(); blocks.push({ type: 'para', text: line }); }

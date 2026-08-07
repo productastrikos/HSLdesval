@@ -7,10 +7,15 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    host: true,   // bind on all interfaces (0.0.0.0) so the LAN can reach the dev server
     proxy: {
       // Dev: forward API calls to the Express server (replaces CRA's "proxy" field)
       '/api': 'http://localhost:5001',
     },
+  },
+  preview: {
+    port: 3000,
+    host: true,
   },
   build: {
     outDir: 'build',     // Express serves client/build in production

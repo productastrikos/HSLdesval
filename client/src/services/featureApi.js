@@ -235,6 +235,18 @@ export async function docworkerEdit({ file, docId, text, name, instruction }) {
 export async function bomGenerate(body) { return postJSON('/bom/generate', body); }
 export async function bomSotr(body)     { return postJSON('/bom/sotr', body); }
 
+// Generator & Transformer capacity sizing from an Electrical Load Analysis (ELA)
+// workbook (.xls/.xlsx) — returns rows shaped to `columns` so they merge
+// straight into the BOM, plus the computed load summary for display.
+export async function bomElaSize({ file, columns, marginPct, powerFactor }) {
+  const form = new FormData();
+  form.append('file', file);
+  if (columns) form.append('columns', JSON.stringify(columns));
+  if (marginPct !== undefined && marginPct !== '') form.append('marginPct', marginPct);
+  if (powerFactor !== undefined && powerFactor !== '') form.append('powerFactor', powerFactor);
+  return postForm('/bom/ela-size', form);
+}
+
 // ── Ship Cost Estimation ─────────────────────────────────────────────────────
 export async function costVendors()        { return getJSON('/cost/vendors'); }
 export async function costEstimate(body)    { return postJSON('/cost/estimate', body); }

@@ -126,7 +126,7 @@ function UploadCard({ onAdded, projects = [] }) {
 
   return (
     <div className={`bg-app-panel border-2 border-dashed ${stageColor} rounded-xl p-6 transition-colors`}>
-      <input ref={fileRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.docx,.txt,.csv,.dwg,.dxf" className="hidden" onChange={onPick} />
+      <input ref={fileRef} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.docx,.txt,.csv,.xlsx,.xls,.dwg,.dxf,application/octet-stream" className="hidden" onChange={onPick} />
       {batch && (
         <div className="space-y-3">
           <div className="text-sm font-semibold text-white">

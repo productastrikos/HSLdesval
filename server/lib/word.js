@@ -93,19 +93,41 @@ function buildWordTable(title, columns, rows, subtitle = '') {
   return buildWordDoc({ title, subtitle, blocks: [{ type: 'table', columns, rows }] });
 }
 
+// ── Markdown pipe-table detection (shared grammar with lib/pdf.js) ────────────
+// A GitHub-style table:  | a | b |  /  | --- | --- |  /  | 1 | 2 |
+const isTableRow = l => /^\s*\|.*\|\s*$/.test(l);
+const isTableSep = l => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(l);
+const splitTableRow = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|')
+  .map(c => c.replace(/\*\*(.+?)\*\*/g, '$1').trim());
+
 // Convert lightweight markdown-ish prose (the kind the model returns) into Word
-// blocks: # / ## / ### headings, "- " bullets, blank-line paragraphs.
+// blocks: # / ## / ### headings, "- " bullets, | pipe | tables, and paragraphs.
 function buildWordFromText(title, text, subtitle = '') {
   const blocks = [];
   const lines = String(text || '').split(/\r?\n/);
   let bullets = [];
   const flush = () => { if (bullets.length) { blocks.push({ type: 'bullet', items: bullets }); bullets = []; } };
 
-  for (const raw of lines) {
-    const line = raw.replace(/\*\*(.+?)\*\*/g, '$1');   // strip bold markers
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].replace(/\*\*(.+?)\*\*/g, '$1');   // strip bold markers
+
+    // Pipe table: header row immediately followed by a separator row.
+    if (isTableRow(line) && i + 1 < lines.length && isTableSep(lines[i + 1])) {
+      flush();
+      const columns = splitTableRow(line);
+      i += 2;                                     // consume header + separator
+      const rows = [];
+      while (i < lines.length && isTableRow(lines[i]) && !isTableSep(lines[i])) {
+        rows.push(splitTableRow(lines[i])); i++;
+      }
+      i--;                                        // for-loop re-increments
+      blocks.push({ type: 'table', columns, rows });
+      continue;
+    }
+
     if (/^###\s+/.test(line))      { flush(); blocks.push({ type: 'heading', level: 3, text: line.replace(/^###\s+/, '') }); }
     else if (/^##\s+/.test(line))  { flush(); blocks.push({ type: 'heading', level: 2, text: line.replace(/^##\s+/, '') }); }
-    else if (/^#\s+/.test(line))   { flush(); blocks.push({ type: 'heading', level: 2, text: line.replace(/^#\s+/, '') }); }
+    else if (/^#\s+/.test(line))   { flush(); blocks.push({ type: 'heading', level: 1, text: line.replace(/^#\s+/, '') }); }
     else if (/^\s*[-*•]\s+/.test(line)) { bullets.push(line.replace(/^\s*[-*•]\s+/, '')); }
     else if (line.trim() === '')   { flush(); }
     else                           { flush(); blocks.push({ type: 'para', text: line }); }

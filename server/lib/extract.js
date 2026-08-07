@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared document text extractor
 //   PDF (per-page text layer; pages with no text → page image → vision model)
-//   · DOCX · images (vision) · plain text
+//   · DOCX · Excel (.xls/.xlsx) · images (vision) · plain text
 // Used by upload, convert, chat-extract, and the feature modules.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -134,9 +134,30 @@ async function extractPdfText(buffer) {
   throw diagnoseEmpty(needVision.length > 0);
 }
 
+// Excel workbook → readable text: one block per sheet, rows as pipe-separated
+// cells (values formatted as displayed, e.g. "1,988.79" not raw floats), with a
+// header line per sheet so a downstream reader (LLM or human) can tell which
+// switchboard/table a row came from. Blank rows are dropped to keep this dense.
+function extractExcelText(buffer) {
+  const XLSX = require('xlsx');
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellStyles: false });
+  const blocks = [];
+  for (const sheetName of workbook.SheetNames) {
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: false, defval: '' });
+    const lines = rows
+      .map(r => r.map(c => String(c == null ? '' : c).trim()).filter(Boolean).join(' | '))
+      .filter(Boolean);
+    if (lines.length) blocks.push(`----- Sheet: ${sheetName} -----\n${lines.join('\n')}`);
+  }
+  return blocks.join('\n\n').trim();
+}
+
 async function extractFileText(buffer, mime, origName = '') {
-  const isPDF  = mime === 'application/pdf' || /\.pdf$/i.test(origName);
-  const isDOCX = mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || /\.docx$/i.test(origName);
+  const isPDF   = mime === 'application/pdf' || /\.pdf$/i.test(origName);
+  const isDOCX  = mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || /\.docx$/i.test(origName);
+  const isExcel = /\.(xlsx|xlsm|xls)$/i.test(origName)
+    || mime === 'application/vnd.ms-excel'
+    || mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
   const isImg  = IMAGE_MIMES.has(mime) || /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(origName);
   const isCad  = isCadName(origName, mime);
 
@@ -158,6 +179,12 @@ async function extractFileText(buffer, mime, origName = '') {
     const mammoth = require('mammoth');
     const result  = await mammoth.extractRawText({ buffer });
     return result.value || '';
+  }
+
+  if (isExcel) {
+    const text = extractExcelText(buffer);
+    if (text) return text;
+    throw readError('Could not read this Excel file. It may be empty, password-protected, or corrupted.');
   }
 
   if (isImg) {

@@ -171,7 +171,7 @@ export default function InspectionReports() {
               <div className="space-y-3">
                 <DocSource label="Inspection Report" value={doc} onChange={(v) => { setDoc(v); setFile(null); setResult(null); setError(null); }} />
                 <div>
-                  <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.dwg,.dxf" className="hidden" onChange={onUpload} />
+                  <input ref={fileRef} type="file" accept=".pdf,.docx,.txt,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.dwg,.dxf,application/octet-stream" className="hidden" onChange={onUpload} />
                   <button onClick={() => fileRef.current?.click()}
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-slate-600 hover:border-sky-500/50 text-[11px] text-slate-400 hover:text-sky-300 transition-colors">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>

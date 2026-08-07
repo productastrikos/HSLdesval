@@ -110,7 +110,7 @@ export default function Workspace() {
             </select>
           </div>
           <div>
-            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.docx,.txt,.csv,.dwg,.dxf" className="hidden"
+            <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff,.bmp,.webp,.gif,.docx,.txt,.csv,.xlsx,.xls,.dwg,.dxf,application/octet-stream" className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) onUpload(f); e.target.value = ''; }} />
             <button onClick={() => fileRef.current?.click()} disabled={upStage === 'working'}
               className="w-full px-3 py-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-500 text-white text-[11px] font-semibold hover:opacity-90 disabled:opacity-40 flex items-center justify-center gap-2">
